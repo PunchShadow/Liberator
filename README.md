@@ -23,7 +23,7 @@ There is a converter which can convert txt to CSR in the folder converter.
 $ ./Liberator 
 --input datapath 
 --type bfs (graph processing algorithm)
---sourceNode 0 (only for bfs and sssp)
+--source 0 (only for bfs and sssp)
 --model 7 or 0 (7 is Liberator and the 0 model is our previous work Ascetic )
 --tetsTime n (the algorithm will excute n times)
 ```

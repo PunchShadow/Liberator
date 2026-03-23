@@ -12,7 +12,7 @@ void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int t
         return;
     }
     graph.setSourceNode(sourceNode);
-    graph.readDataFromFile(path, false);
+    graph.readGraph(path, false);
 
     graph.setPrestoreRatio(adviseRate, 11);
     graph.initGraphHost();
@@ -45,9 +45,9 @@ void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int t
 
     cout<<"Start test new bfs, total test time: "<<testTimes<<endl;
     uint src=graph.sourceNode;
-    long totalduration;
-    long overloaduration;
-    long staticduration;
+    long totalduration = 0;
+    long overloaduration = 0;
+    long staticduration = 0;
     double overloadsize = 0;
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
         if(src<graph.vertexArrSize)
@@ -188,7 +188,8 @@ void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int t
     }
     gpuErrorcheck(cudaPeekAtLastError());
     cout<<"========TEST OVER========"<<endl;
-    cout<<"Test over, average total process time: "<<totalduration/testTimes<<"ms"<<endl;
+    cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"Test over, average total process time (including pre move data): "<<totalduration/testTimes + graph.preMoveDataTime<<"ms"<<endl;
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     //cout<<"average transfer data: "<<overloadsize/testTimes<<" GB"<<endl;
@@ -206,7 +207,7 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes){
         return;
     }
     //graph.setSourceNode(sourceNode);
-    graph.readDataFromFile(path, false);
+    graph.readGraph(path, false);
 
     graph.setPrestoreRatio(adviseRate, 11);
     graph.initGraphHost();
@@ -239,9 +240,9 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes){
 
     cout<<"Start test new cc, total test time: "<<testTimes<<endl;
     //uint src=graph.sourceNode;
-    long totalduration;
-    long overloaduration;
-    long staticduration;
+    long totalduration = 0;
+    long overloaduration = 0;
+    long staticduration = 0;
     double overloadsize = 0;
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
         
@@ -384,7 +385,8 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes){
     }
     gpuErrorcheck(cudaPeekAtLastError());
     cout<<"========TEST OVER========"<<endl;
-    cout<<"Test over, average total process time: "<<totalduration/testTimes<<"ms"<<endl;
+    cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"Test over, average total process time (including pre move data): "<<totalduration/testTimes + graph.preMoveDataTime<<"ms"<<endl;
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     //cout<<"average transfer data: "<<overloadsize/testTimes<<" GB"<<endl;
@@ -396,7 +398,7 @@ void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int t
     graph.setAlgType(SSSP);
     graph.setmodel(model);
     graph.setSourceNode(sourceNode);
-    graph.readDataFromFile(path, false);
+    graph.readGraph(path, false);
     graph.setPrestoreRatio(adviseRate, 13);
     graph.initGraphHost();
     graph.initGraphDevice();
@@ -527,6 +529,7 @@ void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int t
         overloadProcess.clearRecord();
     }
     //cout<<"Total overloadsize: "<<overloadGB<<" GB"<<endl;
+    cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("newsssp.txt");
 
@@ -537,7 +540,7 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes){
     GraphMeta<unsigned long long> graph;
     graph.setAlgType(PR);
     graph.setmodel(model);
-    graph.readDataFromFile(path, true);
+    graph.readGraph(path, true);
     graph.setPrestoreRatio(adviseRate, 16);
     graph.initGraphHost();
     graph.initGraphDevice();
@@ -548,9 +551,9 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes){
     TimeRecord<chrono::milliseconds> preProcess("preProcess");
     TimeRecord<chrono::milliseconds> staticProcess("staticProcess");
     TimeRecord<chrono::milliseconds> overloadProcess("overloadProcess");
-    long Total;
-    long Static;
-    long Overload;
+    long Total = 0;
+    long Static = 0;
+    long Overload = 0;
     totalProcess.startRecord();
 
     graph.refreshLabelAndValue();
@@ -679,9 +682,10 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes){
         //overloadsize+=temp;
     }
     cout<<"=================PR test end================="<<endl;
+    cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
     cout<<"Average static time: "<<Static/testTimes<<endl;
     cout<<"Average overload time: "<<Overload/testTimes<<endl;
-    cout<<"Average Total time: "<<Total/testTimes<<endl;
+    cout<<"Average Total time (including pre move data): "<<Total/testTimes + graph.preMoveDataTime<<endl;
     //cout<<"Average overloadSize: "<<overloadsize/testTimes<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("Liberator_PR_GSHll_res.txt");

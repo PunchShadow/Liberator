@@ -109,19 +109,34 @@ void New_CC_opt(string fileName,int model,int testTimes){
     //ReadDataFile
     cout << "readDataFromFile" << endl;
     auto startTime = chrono::steady_clock::now();
+    bool isBCSR = endsWith(fileName, ".bcsr") || endsWith(fileName, ".bwcsr");
     ifstream infile(fileName, ios::in | ios::binary);
-    infile.read((char *) &vertexArrSize, sizeof(EDGE_POINTER_TYPE));
-    infile.read((char *) &edgeArrSize, sizeof(EDGE_POINTER_TYPE));
-    cout << "vertex num: " << vertexArrSize << " edge num: " << edgeArrSize << endl;
-    nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
-    //gpuErrorcheck(cudaMallocHost(&nodePointers, sizeof(EDGE_POINTER_TYPE)*vertexArrSize)); 
-    // gpuErrorcheck(cudaMallocManaged(&nodePointers,sizeof(EDGE_POINTER_TYPE)*vertexArrSize));
-    // gpuErrorcheck(cudaMemAdvise(nodePointers,vertexArrSize*sizeof(EDGE_POINTER_TYPE),cudaMemAdviseSetAccessedBy,0));
-    infile.read((char *) nodePointers, sizeof(EDGE_POINTER_TYPE) * vertexArrSize);
-    gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(uint)*edgeArrSize));
-    // gpuErrorcheck(cudaMallocManaged(&edgeArray,sizeof(uint)*edgeArrSize));
-    // gpuErrorcheck(cudaMemAdvise(edgeArray,edgeArrSize*sizeof(uint),cudaMemAdviseSetAccessedBy,0));
-    infile.read((char *) edgeArray, sizeof(uint) * edgeArrSize);
+    if (isBCSR) {
+        // Subway bcsr format: uint32 header + uint32 nodePointers
+        uint num_nodes, num_edges;
+        infile.read((char *) &num_nodes, sizeof(uint));
+        infile.read((char *) &num_edges, sizeof(uint));
+        vertexArrSize = num_nodes;
+        edgeArrSize = num_edges;
+        cout << "vertex num: " << vertexArrSize << " edge num: " << edgeArrSize << endl;
+        uint *nodePointersU32 = new uint[num_nodes];
+        infile.read((char *) nodePointersU32, sizeof(uint) * num_nodes);
+        nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
+        for (uint i = 0; i < num_nodes; i++) {
+            nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
+        }
+        delete[] nodePointersU32;
+        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(uint)*edgeArrSize));
+        infile.read((char *) edgeArray, sizeof(uint) * edgeArrSize);
+    } else {
+        infile.read((char *) &vertexArrSize, sizeof(EDGE_POINTER_TYPE));
+        infile.read((char *) &edgeArrSize, sizeof(EDGE_POINTER_TYPE));
+        cout << "vertex num: " << vertexArrSize << " edge num: " << edgeArrSize << endl;
+        nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
+        infile.read((char *) nodePointers, sizeof(EDGE_POINTER_TYPE) * vertexArrSize);
+        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(uint)*edgeArrSize));
+        infile.read((char *) edgeArray, sizeof(uint) * edgeArrSize);
+    }
     auto endTime = chrono::steady_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime).count();
     cout << "readDataFromFile " << duration << " ms" << endl;
@@ -187,6 +202,7 @@ void New_CC_opt(string fileName,int model,int testTimes){
     gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(uint)));
     gpuErrorcheck(cudaMemcpy(staticEdgeListD, edgeArray, max_partition_size * sizeof(uint), cudaMemcpyHostToDevice));
     preProcess.endRecord();
+    long preMoveDataTime = preProcess.getDuration();
     preProcess.print();
     preProcess.clearRecord();
     cudaMalloc(&isInStaticD, vertexArrSize * sizeof(bool));
@@ -225,9 +241,9 @@ void New_CC_opt(string fileName,int model,int testTimes){
     totalProcess.print();
     totalProcess.clearRecord();
     uint64_t numthreads = 1024;
-    long totalduration;
-    long overloadduration;
-    long staticduration;
+    long totalduration = 0;
+    long overloadduration = 0;
+    long staticduration = 0;
     dim3 staticgrid(56,1,1);
     dim3 staticblock(1024,1,1);
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
@@ -335,7 +351,8 @@ void New_CC_opt(string fileName,int model,int testTimes){
                                     thrust::plus<uint>());
     }
     cout<<"========TEST OVER========"<<endl;
-    cout<<"Test over, average total process time: "<<totalduration/testTimes<<"ms"<<endl;
+    cout<<"pre move data time: "<<preMoveDataTime<<"ms"<<endl;
+    cout<<"Test over, average total process time (including pre move data): "<<totalduration/testTimes + preMoveDataTime<<"ms"<<endl;
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloadduration/testTimes<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());

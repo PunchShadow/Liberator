@@ -112,8 +112,13 @@ public:
     double adviseRate;
     int paramSize;
     ALG_TYPE algType;
+    long preMoveDataTime = 0;
 
     void readDataFromFile(const string &fileName, bool isPagerank);
+
+    void readDataFromBCSR(const string &fileName, bool isPagerank);
+
+    void readGraph(const string &fileName, bool isPagerank);
 
     void transFileUintToUlong(const string &fileName);
 
@@ -201,6 +206,75 @@ void GraphMeta<EdgeType>::readDataFromFile(const string &fileName, bool isPagera
     auto endTime = chrono::steady_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime).count();
     cout << "readDataFromFile " << duration << " ms" << endl;
+}
+
+template<class EdgeType>
+void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagerank) {
+    cout << "readDataFromBCSR (Subway format)" << endl;
+    auto startTime = chrono::steady_clock::now();
+    ifstream infile(fileName, ios::in | ios::binary);
+    if (!infile.is_open()) {
+        cerr << "Error: cannot open file " << fileName << endl;
+        exit(1);
+    }
+
+    // Subway bcsr/bwcsr: header is two uint32 values
+    uint num_nodes, num_edges;
+    infile.read((char *) &num_nodes, sizeof(uint));
+    infile.read((char *) &num_edges, sizeof(uint));
+    this->vertexArrSize = num_nodes;
+    this->edgeArrSize = num_edges;
+    cout << "vertex num: " << this->vertexArrSize << " edge num: " << this->edgeArrSize << endl;
+
+    // For PageRank, bcsr has no outDegree section; compute from nodePointers later
+    // First read uint32 nodePointers and widen to EDGE_POINTER_TYPE
+    uint *nodePointersU32 = new uint[num_nodes];
+    infile.read((char *) nodePointersU32, sizeof(uint) * num_nodes);
+
+    if(model == 7) {
+        nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
+        for (uint i = 0; i < num_nodes; i++) {
+            nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
+        }
+        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(EdgeType) * edgeArrSize));
+        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
+    } else {
+        nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
+        for (uint i = 0; i < num_nodes; i++) {
+            nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
+        }
+        edgeArray = new EdgeType[edgeArrSize];
+        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
+    }
+    delete[] nodePointersU32;
+    infile.close();
+
+    // For PageRank, compute outDegree from nodePointers
+    if (isPagerank) {
+        outDegree = new SIZE_TYPE[vertexArrSize];
+        for (SIZE_TYPE i = 0; i < vertexArrSize - 1; i++) {
+            outDegree[i] = (SIZE_TYPE)(nodePointers[i + 1] - nodePointers[i]);
+        }
+        outDegree[vertexArrSize - 1] = (SIZE_TYPE)(edgeArrSize - nodePointers[vertexArrSize - 1]);
+    }
+
+    auto endTime = chrono::steady_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime).count();
+    cout << "readDataFromBCSR " << duration << " ms" << endl;
+}
+
+static inline bool endsWith(const string &str, const string &suffix) {
+    if (suffix.size() > str.size()) return false;
+    return str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+template<class EdgeType>
+void GraphMeta<EdgeType>::readGraph(const string &fileName, bool isPagerank) {
+    if (endsWith(fileName, ".bcsr") || endsWith(fileName, ".bwcsr")) {
+        readDataFromBCSR(fileName, isPagerank);
+    } else {
+        readDataFromFile(fileName, isPagerank);
+    }
 }
 
 template<class EdgeType>
@@ -359,13 +433,14 @@ void GraphMeta<EdgeType>::initGraphDevice() {
     gpuErrorcheck(cudaStreamCreate(&steamStatic));
     gpuErrorcheck(cudaStreamCreate(&streamDynamic));
     //pre store
-    TimeRecord<chrono::milliseconds> totalProcess("pre move data");
-    totalProcess.startRecord();
+    TimeRecord<chrono::milliseconds> preMoveTimer("pre move data");
+    preMoveTimer.startRecord();
     gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(EdgeType)));
     gpuErrorcheck(cudaMemcpy(staticEdgeListD, edgeArray, max_partition_size * sizeof(EdgeType), cudaMemcpyHostToDevice));
-    totalProcess.endRecord();
-    totalProcess.print();
-    totalProcess.clearRecord();
+    preMoveTimer.endRecord();
+    preMoveDataTime = preMoveTimer.getDuration();
+    preMoveTimer.print();
+    preMoveTimer.clearRecord();
 
     cudaMalloc(&isInStaticD, vertexArrSize * sizeof(bool));
     cudaMalloc(&overloadNodeListD, vertexArrSize * sizeof(SIZE_TYPE));
