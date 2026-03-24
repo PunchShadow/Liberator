@@ -8,12 +8,12 @@
 
 #include "gpu_kernels.cuh"
 #include "TimeRecord.cuh"
-void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes);
-void cc_opt(string path, double adviseRate,int model,int testTimes);
-void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes);
-void pr_opt(string path, double adviseRate,int model,int testTimes);
-void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes);
-void newcc_opt(string path, double adviseRate,int model,int testTimes);
-void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes);
-void newpr_opt(string path, double adviseRate,int model,int testTimes);
+void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit = 0.0);
+void cc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0);
+void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0);
+void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0);
+void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit = 0.0);
+void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0);
+void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0);
+void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0);
 #endif //PTGRAPH_CALCULATEOPT_CUH

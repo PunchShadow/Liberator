@@ -11,12 +11,13 @@ __global__ void testRefresh(bool *isActive, T *data, uint size) {
     });
 }
 
-void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes) {
+void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit) {
     cout << "======bfs_opt=======" << endl;
     cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<uint> graph;
     graph.setAlgType(BFS);
     graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     graph.setSourceNode(sourceNode);
     graph.readGraph(path, false);
     
@@ -282,6 +283,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
             
         }
         totalProcess.endRecord();
+        cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
         preProcess.print();
         staticProcess.print();
@@ -313,13 +315,14 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
     cout<<"average overloadsize: "<<overloadSize/testTimes<<endl;
 }
 
-void cc_opt(string path, double adviseRate,int model,int _testTimes) {
+void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuMemoryLimit) {
     cout << "==========cc_opt==========" << endl;
     GraphMeta<uint> graph;
     graph.setAlgType(CC);
+    graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     graph.readGraph(path, false);
     graph.setPrestoreRatio(adviseRate, 13);
-    graph.setmodel(model);
     graph.initGraphHost();
     graph.initGraphDevice();
     cudaDeviceSynchronize();
@@ -520,6 +523,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes) {
             cout<< temp <<endl;
         }
         totalProcess.endRecord();
+        cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
         forULLProcess.print();
         fillProcess.print();
@@ -548,11 +552,12 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes) {
     gpuErrorcheck(cudaPeekAtLastError());
 }
 
-void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes) {
+void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit) {
     cout << "========sssp_opt==========" << endl;
     GraphMeta<EdgeWithWeight> graph;
     graph.setAlgType(SSSP);
     graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     graph.setSourceNode(sourceNode);
     graph.readGraph(path, false);
     graph.setPrestoreRatio(adviseRate, 15);
@@ -753,6 +758,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
             //cout<<endl;
         }
         totalProcess.endRecord();
+        cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
         forULLProcess.print();
         overloadMoveProcess.print();
@@ -769,11 +775,12 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
     //graph.writevalue("oldsssp.txt");
 }
 
-void pr_opt(string path, double adviseRate,int model,int testTimes) {
+void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit) {
     cout << "=======pr_opt=======" << endl;
     GraphMeta<uint> graph;
     graph.setAlgType(PR);
     graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     graph.readGraph(path, true);
     graph.setPrestoreRatio(adviseRate, 17);
     graph.initGraphHost();

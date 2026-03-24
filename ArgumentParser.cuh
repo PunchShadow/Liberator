@@ -20,6 +20,7 @@ public:
     string algo;
     int model;
     int testTimes;
+    double gpuMemoryLimit = 0.0; // GPU memory limit in GB (0 = use actual GPU memory)
     ArgumentParser(int argc, char **argv, bool canHaveSource);
 
     bool Parse();

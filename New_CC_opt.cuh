@@ -22,7 +22,7 @@ struct StaticRegionInfo
 EDGE_POINTER_TYPE vertexArrSize, edgeArrSize;
 
 StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize, EDGE_POINTER_TYPE vertexArrSize, EDGE_POINTER_TYPE* nodePointers, uint*degree,
-                       bool* isInStatic){
+                       bool* isInStatic, size_t gpuMemoryLimitBytes = 0){
     unsigned long max_partition_size;
     unsigned long max_static_node;
     unsigned long total_gpu_size;
@@ -34,6 +34,10 @@ StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize
     size_t totalMemory;
     size_t availMemory;
     cudaMemGetInfo(&availMemory, &totalMemory);
+    if(gpuMemoryLimitBytes > 0 && gpuMemoryLimitBytes < availMemory){
+        cout << "GPU memory limit set to " << gpuMemoryLimitBytes / (1024.0*1024.0*1024.0) << " GB" << endl;
+        availMemory = gpuMemoryLimitBytes;
+    }
     long reduceMem;
     reduceMem = 6*sizeof(uint)*(long)vertexArrSize;
     reduceMem += 4 * sizeof(bool) * (long) vertexArrSize;
@@ -97,7 +101,7 @@ void cc_kernelStatic(uint activeNodesNum, uint *activeNodeListD,
     });
 }
 
-void New_CC_opt(string fileName,int model,int testTimes){
+void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit = 0.0){
     if(model!=7){
         cout<<"model not match"<<endl;
         return;
@@ -162,7 +166,11 @@ void New_CC_opt(string fileName,int model,int testTimes){
         degree[i] = nodePointers[i + 1] - nodePointers[i];
     }
     degree[vertexArrSize - 1] = edgeArrSize - nodePointers[vertexArrSize - 1];
-    StaticInfo = getMaxPartionSize(11,edgeArrSize,vertexArrSize,nodePointers,degree,isInStatic);
+    size_t gpuMemLimitBytes = 0;
+    if(gpuMemoryLimit > 0){
+        gpuMemLimitBytes = (size_t)(gpuMemoryLimit * 1024ULL * 1024ULL * 1024ULL);
+    }
+    StaticInfo = getMaxPartionSize(11,edgeArrSize,vertexArrSize,nodePointers,degree,isInStatic, gpuMemLimitBytes);
     for(uint i=0;i<vertexArrSize;i++){
         isActive[i] = 1;
         value[i] = i;
@@ -335,6 +343,7 @@ void New_CC_opt(string fileName,int model,int testTimes){
             // overloadsize += temp;
         }
         totalProcess.endRecord();
+        cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
         staticProcess.print();
         overloadProcess.print();

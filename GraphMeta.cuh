@@ -113,6 +113,7 @@ public:
     int paramSize;
     ALG_TYPE algType;
     long preMoveDataTime = 0;
+    size_t gpuMemoryLimitBytes = 0; // 0 = use actual GPU memory
 
     void readDataFromFile(const string &fileName, bool isPagerank);
 
@@ -154,6 +155,11 @@ public:
     void writevalue(string filename);
     void setmodel(int _model){
         this->model = _model;
+    }
+    void setGpuMemoryLimit(double limitGB){
+        if(limitGB > 0){
+            this->gpuMemoryLimitBytes = (size_t)(limitGB * 1024ULL * 1024ULL * 1024ULL);
+        }
     }
     bool checkgraph();
     SIZE_TYPE ret_max_partition_size(){
@@ -519,6 +525,10 @@ void GraphMeta<EdgeType>::getMaxPartitionSize() {
     size_t totalMemory;
     size_t availMemory;
     cudaMemGetInfo(&availMemory, &totalMemory);
+    if(gpuMemoryLimitBytes > 0 && gpuMemoryLimitBytes < availMemory){
+        cout << "GPU memory limit set to " << gpuMemoryLimitBytes / (1024.0*1024.0*1024.0) << " GB" << endl;
+        availMemory = gpuMemoryLimitBytes;
+    }
     unsigned long reduceMem;
     if(algType==PR){
         reduceMem = (paramSize-2) * sizeof(SIZE_TYPE) * (long) vertexArrSize;
@@ -526,7 +536,7 @@ void GraphMeta<EdgeType>::getMaxPartitionSize() {
     }
     else
     reduceMem = paramSize * sizeof(SIZE_TYPE) * (long) vertexArrSize + vertexArrSize*sizeof(EDGE_POINTER_TYPE);
-    
+
     cout << "reduceMem " << reduceMem  << " ParamsSize " << paramSize << endl;
     cout << "availMemory " << availMemory << " totalMemory " << totalMemory << endl;     
     cout << "available memory for edges "<< (availMemory - reduceMem) << " sizeof EdgeType is "<<sizeof(EdgeType)<<endl;

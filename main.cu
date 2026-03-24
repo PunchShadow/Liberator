@@ -28,29 +28,32 @@ int main(int argc, char** argv) {
     if (arguments.algo.empty()) {
         arguments.algo = "bfs";
     }
+    if (arguments.gpuMemoryLimit > 0) {
+        cout << "GPU memory limit: " << arguments.gpuMemoryLimit << " GB" << endl;
+    }
     if (arguments.algo == "bfs") {
         cout << "arguments.algo " << arguments.algo << endl;
     cout<<"arguments.sourceNode "<<arguments.sourceNode<<endl;
         if(arguments.model==7)
-        newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes);
+        newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes, arguments.gpuMemoryLimit);
         else
-        bfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes);
+        bfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
     } else if (arguments.algo == "cc") {
         if(arguments.model==7)
-        //newcc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes);
-        New_CC_opt(arguments.input,arguments.model,arguments.testTimes);
+        //newcc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        New_CC_opt(arguments.input,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
         else
-        cc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes);
+        cc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
     } else if (arguments.algo == "sssp") {
         if(arguments.model==7)
-        newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes);
+        newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
         else
-        sssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes);
+        sssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
     } else if (arguments.algo == "pr") {
         if(arguments.model==7)
-        newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes);
+        newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
         else
-        pr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes);
+        pr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
     }
     
     return 0;

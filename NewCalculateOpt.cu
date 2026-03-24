@@ -1,11 +1,12 @@
 #include "CalculateOpt.cuh"
 
-void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes){
+void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit){
     cout << "======NEW_bfs_opt=======" << endl;
     cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<uint> graph;
     graph.setAlgType(BFS);
     graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     if(model!=7)
     {
         cout<<"model not match"<<endl;
@@ -165,14 +166,15 @@ void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int t
             // cout<<temp<<endl;
         }
         totalProcess.endRecord();
+        cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
         preProcess.print();
         staticProcess.print();
         overloadProcess.print();
-        
+
         cout << "nodeSum : " << nodeSum << endl;
         //cout << "move overload size : " << overloadEdges * sizeof(uint) << endl;
-        
+
         src+=graph.vertexArrSize/testTimes;
         totalduration+=totalProcess.getDuration();
         staticduration+=staticProcess.getDuration();
@@ -184,7 +186,7 @@ void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int t
         // double temp = (double)(overloadedges)*sizeof(uint)/1024/1024/1024;
         // overloadsize+=temp;
         // cout<<"transfer "<<temp<<" GB"<<endl;
-        
+
     }
     gpuErrorcheck(cudaPeekAtLastError());
     cout<<"========TEST OVER========"<<endl;
@@ -195,12 +197,13 @@ void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int t
     //cout<<"average transfer data: "<<overloadsize/testTimes<<" GB"<<endl;
 }
 
-void newcc_opt(string path, double adviseRate,int model,int testTimes){
+void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit){
     cout << "======NEW_cc_opt=======" << endl;
     //cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<uint> graph;
     graph.setAlgType(CC);
     graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     if(model!=7)
     {
         cout<<"model not match"<<endl;
@@ -362,14 +365,15 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes){
             // cout<<temp<<endl;
         }
         totalProcess.endRecord();
+        cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
         preProcess.print();
         staticProcess.print();
         overloadProcess.print();
-        
+
         cout << "nodeSum : " << nodeSum << endl;
         //cout << "move overload size : " << overloadEdges * sizeof(uint) << endl;
-        
+
         //src+=graph.vertexArrSize/testTimes;
         totalduration+=totalProcess.getDuration();
         staticduration+=staticProcess.getDuration();
@@ -381,7 +385,7 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes){
         // double temp = (double)(overloadedges)*sizeof(uint)/1024/1024/1024;
         // overloadsize+=temp;
         // cout<<"transfer "<<temp<<" GB"<<endl;
-        
+
     }
     gpuErrorcheck(cudaPeekAtLastError());
     cout<<"========TEST OVER========"<<endl;
@@ -392,11 +396,12 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes){
     //cout<<"average transfer data: "<<overloadsize/testTimes<<" GB"<<endl;
 }
 
-void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes){
+void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit){
     cout << "========NEW_sssp_opt==========" << endl;
     GraphMeta<EdgeWithWeight> graph;
     graph.setAlgType(SSSP);
     graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     graph.setSourceNode(sourceNode);
     graph.readGraph(path, false);
     graph.setPrestoreRatio(adviseRate, 13);
@@ -517,6 +522,7 @@ void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int t
             // cout<<temp<<endl;
         }
         totalProcess.endRecord();
+        cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
         staticProcess.print();
         overloadProcess.print();
@@ -535,11 +541,12 @@ void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int t
 
 }
 
-void newpr_opt(string path, double adviseRate,int model,int testTimes){
+void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit){
     cout<<"========NEW_pr_opt==========="<<endl;
     GraphMeta<unsigned long long> graph;
     graph.setAlgType(PR);
     graph.setmodel(model);
+    graph.setGpuMemoryLimit(gpuMemoryLimit);
     graph.readGraph(path, true);
     graph.setPrestoreRatio(adviseRate, 16);
     graph.initGraphHost();

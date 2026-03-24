@@ -36,6 +36,9 @@ bool ArgumentParser::Parse() {
             else if(strcmp(argv[i], "--testTime")==0){
                 testTimes = atoi(argv[i+1]);
             }
+            else if(strcmp(argv[i], "--gpuMemory")==0){
+                gpuMemoryLimit = atof(argv[i+1]);
+            }
         }
 
         if (hasInput)
