@@ -13,6 +13,7 @@
 #include <thrust/sort.h>
 #include "TimeRecord.cuh"
 #include"gpu_kernels.cuh"
+#include "cpu_verify.cuh"
 #pragma once
 struct StaticRegionInfo
 {
@@ -37,20 +38,30 @@ StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize
     if(gpuMemoryLimitBytes > 0 && gpuMemoryLimitBytes < availMemory){
         cout << "GPU memory limit set to " << gpuMemoryLimitBytes / (1024.0*1024.0*1024.0) << " GB" << endl;
         availMemory = gpuMemoryLimitBytes;
+        g_gpuMemTracker.setBudget(gpuMemoryLimitBytes);
+    } else {
+        g_gpuMemTracker.setBudget(availMemory);
     }
-    long reduceMem;
-    reduceMem = 6*sizeof(uint)*(long)vertexArrSize;
-    reduceMem += 4 * sizeof(bool) * (long) vertexArrSize;
-    reduceMem += vertexArrSize*sizeof(EDGE_POINTER_TYPE);
+    g_gpuMemTracker.totalAllocated = 0;
+    size_t reduceMem;
+    reduceMem = 6*sizeof(uint)*(size_t)vertexArrSize;
+    reduceMem += 4 * sizeof(bool) * (size_t) vertexArrSize;
+    reduceMem += (size_t)vertexArrSize*sizeof(EDGE_POINTER_TYPE);
     cout << "reduceMem " << reduceMem << " testNumNodes " << vertexArrSize << " edgeArrSize " << edgeArrSize << " ParamsSize " << paramSize << endl;
-    total_gpu_size = (availMemory - reduceMem) / sizeof(uint);
+    if (reduceMem >= availMemory) {
+        cout << "WARNING: per-vertex arrays (" << reduceMem / (1024.0*1024.0) << " MB) exceed available GPU memory ("
+             << availMemory / (1024.0*1024.0) << " MB). Setting edge partition to minimum." << endl;
+        total_gpu_size = 0;
+    } else {
+        total_gpu_size = (availMemory - reduceMem) / sizeof(uint);
+    }
     max_partition_size = total_gpu_size;
     if (max_partition_size > edgeArrSize) {
         max_partition_size = edgeArrSize;
     }
     cout << "availMemory " << availMemory << " totalMemory " << totalMemory << endl;
-    printf("static memory is %ld totalGlobalMem is %ld, max static edge size is %ld\n gpu total edge size %ld \n multiprocessors %d \n",
-                availMemory - reduceMem,
+    printf("static memory is %zu totalGlobalMem is %zu, max static edge size is %lu\n gpu total edge size %lu \n multiprocessors %d \n",
+                (reduceMem < availMemory) ? (availMemory - reduceMem) : (size_t)0,
                 dev.totalGlobalMem, max_partition_size, total_gpu_size, dev.multiProcessorCount);
     if (max_partition_size > UINT_MAX) {
         printf("bigger than DIST_INFINITY\n");
@@ -92,16 +103,20 @@ void cc_kernelStatic(uint activeNodesNum, uint *activeNodeListD,
             uint sourceValue = valueD[id];
             for (uint i = 0; i < degreeD[id]; i++) {
                 uint vertexId = edgeListD[edgeIndex + i];
-                if (sourceValue < valueD[vertexId]) {
+                uint destValue = valueD[vertexId];
+                if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD[vertexId] = 1;
+                } else if (destValue < sourceValue) {
+                    atomicMin(&valueD[id], destValue);
+                    isActiveD[id] = 1;
                 }
             }
         }
     });
 }
 
-void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit = 0.0){
+void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false){
     if(model!=7){
         cout<<"model not match"<<endl;
         return;
@@ -197,35 +212,35 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     bool* isOverloadActive;
     uint* valueD;
     cout<<"initGraphDevice()"<<endl;
-    cudaMalloc(&prefixSumTemp, vertexArrSize * sizeof(uint));
+    GPU_MALLOC(&prefixSumTemp, vertexArrSize * sizeof(uint), "CC:prefixSumTemp");
     gpuErrorcheck(cudaStreamCreate(&StreamStatic));
     gpuErrorcheck(cudaStreamCreate(&StreamDynamic));
 
     TimeRecord<chrono::milliseconds> preProcess("pre move data");
     preProcess.startRecord();
-    gpuErrorcheck(cudaMalloc(&nodePointersD, vertexArrSize*sizeof(EDGE_POINTER_TYPE)));
+    GPU_MALLOC(&nodePointersD, vertexArrSize*sizeof(EDGE_POINTER_TYPE), "CC:nodePointersD");
     gpuErrorcheck(cudaMemcpy(nodePointersD,nodePointers,vertexArrSize*sizeof(EDGE_POINTER_TYPE),cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMalloc(&staticNodePointersD, max_static_node*sizeof(uint)));
+    GPU_MALLOC(&staticNodePointersD, max_static_node*sizeof(uint), "CC:staticNodePointersD");
     gpuErrorcheck(cudaMemcpy(staticNodePointersD, staticnodepointers, max_static_node*sizeof(uint),cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(uint)));
+    GPU_MALLOC(&staticEdgeListD, max_partition_size * sizeof(uint), "CC:staticEdgeListD");
     gpuErrorcheck(cudaMemcpy(staticEdgeListD, edgeArray, max_partition_size * sizeof(uint), cudaMemcpyHostToDevice));
     preProcess.endRecord();
     long preMoveDataTime = preProcess.getDuration();
     preProcess.print();
     preProcess.clearRecord();
-    cudaMalloc(&isInStaticD, vertexArrSize * sizeof(bool));
+    GPU_MALLOC(&isInStaticD, vertexArrSize * sizeof(bool), "CC:isInStaticD");
     cudaMemcpy(isInStaticD, isInStatic, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
-    cudaMalloc(&overloadNodeListD, vertexArrSize * sizeof(uint));
-    cudaMalloc(&staticNodeListD, vertexArrSize * sizeof(uint));
-    cudaMalloc(&degreeD, vertexArrSize * sizeof(uint));
-    cudaMalloc(&isActiveD, vertexArrSize * sizeof(bool));
-    cudaMalloc(&isStaticActive, vertexArrSize * sizeof(bool));
-    cudaMalloc(&isOverloadActive, vertexArrSize * sizeof(bool));
+    GPU_MALLOC(&overloadNodeListD, vertexArrSize * sizeof(uint), "CC:overloadNodeListD");
+    GPU_MALLOC(&staticNodeListD, vertexArrSize * sizeof(uint), "CC:staticNodeListD");
+    GPU_MALLOC(&degreeD, vertexArrSize * sizeof(uint), "CC:degreeD");
+    GPU_MALLOC(&isActiveD, vertexArrSize * sizeof(bool), "CC:isActiveD");
+    GPU_MALLOC(&isStaticActive, vertexArrSize * sizeof(bool), "CC:isStaticActive");
+    GPU_MALLOC(&isOverloadActive, vertexArrSize * sizeof(bool), "CC:isOverloadActive");
     cudaMemcpy(degreeD, degree, vertexArrSize * sizeof(uint), cudaMemcpyHostToDevice);
     cudaMemcpy(isActiveD, isActive, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
     cudaMemset(isStaticActive, 0, vertexArrSize * sizeof(bool));
     cudaMemset(isOverloadActive, 0, vertexArrSize * sizeof(bool));
-    cudaMalloc(&valueD, vertexArrSize * sizeof(uint));
+    GPU_MALLOC(&valueD, vertexArrSize * sizeof(uint), "CC:valueD");
     cudaMemcpy(valueD, value, vertexArrSize * sizeof(uint), cudaMemcpyHostToDevice);
     thrust::device_ptr<bool> activeLablingThrust;
     thrust::device_ptr<bool> actStaticLablingThrust;
@@ -234,6 +249,7 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     actStaticLablingThrust = thrust::device_ptr<bool>(isStaticActive);
     actOverLablingThrust = thrust::device_ptr<bool>(isOverloadActive);
     gpuErrorcheck(cudaPeekAtLastError());
+    g_gpuMemTracker.printSummary();
     cout << "initGraphDevice() end" << endl;
 
     cudaDeviceSynchronize();
@@ -355,6 +371,12 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
         totalProcess.clearRecord();
         staticProcess.clearRecord();
         overloadProcess.clearRecord();
+        if (verify && testIndex == testTimes - 1) {
+            // Verify before refresh resets the values
+            cudaMemcpy(value, valueD, vertexArrSize * sizeof(uint), cudaMemcpyDeviceToHost);
+            cudaDeviceSynchronize();
+            cpu_verify_cc(nodePointers, edgeArray, vertexArrSize, edgeArrSize, value);
+        }
         refreshLableAndValue(isActiveD,isStaticActive,isOverloadActive,value,valueD);
         activeNodesNum = thrust::reduce(activeLablingThrust, activeLablingThrust + vertexArrSize, 0,
                                     thrust::plus<uint>());
@@ -365,6 +387,6 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloadduration/testTimes<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
-    
+
     return;
 }

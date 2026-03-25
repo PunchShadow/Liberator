@@ -3,6 +3,7 @@
 //
 
 #include "CalculateOpt.cuh"
+#include "cpu_verify.cuh"
 
 template<class T>
 __global__ void testRefresh(bool *isActive, T *data, uint size) {
@@ -11,7 +12,7 @@ __global__ void testRefresh(bool *isActive, T *data, uint size) {
     });
 }
 
-void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit) {
+void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify) {
     cout << "======bfs_opt=======" << endl;
     cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<uint> graph;
@@ -313,9 +314,14 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     cout<<"average overloadsize: "<<overloadSize/testTimes<<endl;
+    if (verify) {
+        cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+        cudaDeviceSynchronize();
+        cpu_verify_bfs(graph.nodePointers, (uint *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, sourceNode, graph.value);
+    }
 }
 
-void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuMemoryLimit) {
+void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuMemoryLimit, bool verify) {
     cout << "==========cc_opt==========" << endl;
     GraphMeta<uint> graph;
     graph.setAlgType(CC);
@@ -550,9 +556,14 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloadduration*1000/testTimes<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
+    if (verify) {
+        cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+        cudaDeviceSynchronize();
+        cpu_verify_cc(graph.nodePointers, (uint *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, graph.value);
+    }
 }
 
-void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit) {
+void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify) {
     cout << "========sssp_opt==========" << endl;
     GraphMeta<EdgeWithWeight> graph;
     graph.setAlgType(SSSP);
@@ -773,9 +784,14 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
     cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("oldsssp.txt");
+    if (verify) {
+        cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+        cudaDeviceSynchronize();
+        cpu_verify_sssp(graph.nodePointers, graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, sourceNode, graph.value);
+    }
 }
 
-void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit) {
+void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify) {
     cout << "=======pr_opt=======" << endl;
     GraphMeta<uint> graph;
     graph.setAlgType(PR);
@@ -991,4 +1007,7 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
     }
     cout<<"0.15num: "<<num<<endl;
     //graph.writevalue("Ascetic_PR_GSH_res.txt");
+    if (verify) {
+        cpu_verify_pr(graph.nodePointers, (uint *)graph.edgeArray, graph.outDegree, graph.vertexArrSize, graph.edgeArrSize, graph.valuePr);
+    }
 }

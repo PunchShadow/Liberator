@@ -14,6 +14,12 @@ ArgumentParser::ArgumentParser(int argc, char **argv, bool canHaveSource) {
 
 bool ArgumentParser::Parse() {
     try {
+        // Check for standalone boolean flags first
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--verify") == 0) {
+                verify = true;
+            }
+        }
         for (int i = 1; i < argc - 1; i = i + 2) {
             //argv[i]
 

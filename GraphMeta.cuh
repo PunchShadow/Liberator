@@ -30,6 +30,59 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
 
 #define gpuErrorcheck(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 
+// GPU memory allocation tracker
+struct GpuMemTracker {
+    size_t totalAllocated = 0;
+    size_t budgetBytes = 0; // 0 = no limit
+
+    void setBudget(size_t bytes) { budgetBytes = bytes; }
+
+    template<typename T>
+    cudaError_t trackMalloc(T **ptr, size_t size, const char *name) {
+        cudaError_t err = cudaMalloc(ptr, size);
+        if (err == cudaSuccess) {
+            totalAllocated += size;
+            double sizeMB = size / (1024.0 * 1024.0);
+            printf("  [cudaMalloc] %-35s %10.2f MB  (cumulative: %10.2f MB)\n",
+                   name, sizeMB, totalAllocated / (1024.0 * 1024.0));
+        } else {
+            fprintf(stderr, "  [cudaMalloc FAILED] %s: %s (requested %.2f MB)\n",
+                    name, cudaGetErrorString(err), size / (1024.0 * 1024.0));
+        }
+        return err;
+    }
+
+    void printSummary() {
+        printf("\n========== GPU Memory Allocation Summary ==========\n");
+        printf("  Total allocated:   %10.2f MB  (%6.2f GB)\n",
+               totalAllocated / (1024.0 * 1024.0), totalAllocated / (1024.0 * 1024.0 * 1024.0));
+        if (budgetBytes > 0) {
+            printf("  Memory budget:     %10.2f MB  (%6.2f GB)\n",
+                   budgetBytes / (1024.0 * 1024.0), budgetBytes / (1024.0 * 1024.0 * 1024.0));
+            if (totalAllocated > budgetBytes) {
+                printf("  *** OVER BUDGET by %.2f MB! ***\n",
+                       (totalAllocated - budgetBytes) / (1024.0 * 1024.0));
+            } else {
+                printf("  Within budget (%.2f MB remaining)\n",
+                       (budgetBytes - totalAllocated) / (1024.0 * 1024.0));
+            }
+        }
+        size_t freeBytes, totalBytes;
+        cudaMemGetInfo(&freeBytes, &totalBytes);
+        printf("  Actual GPU free:   %10.2f MB  (%6.2f GB)\n",
+               freeBytes / (1024.0 * 1024.0), freeBytes / (1024.0 * 1024.0 * 1024.0));
+        printf("  Actual GPU total:  %10.2f MB  (%6.2f GB)\n",
+               totalBytes / (1024.0 * 1024.0), totalBytes / (1024.0 * 1024.0 * 1024.0));
+        printf("====================================================\n\n");
+    }
+};
+
+// Global GPU memory tracker instance
+static GpuMemTracker g_gpuMemTracker;
+
+// Convenience macro for tracked allocation
+#define GPU_MALLOC(ptr, size, name) gpuErrorcheck(g_gpuMemTracker.trackMalloc((ptr), (size), (name)))
+
 struct PartEdgeListInfo {
     SIZE_TYPE partActiveNodeNums;
     SIZE_TYPE partEdgeNums;
@@ -427,8 +480,8 @@ template<class EdgeType>
 void GraphMeta<EdgeType>::initGraphDevice() {
     cout << "initGraphDevice()" << endl;
     
-    cudaMalloc(&resultD, grid.x * sizeof(uint));
-    cudaMalloc(&prefixSumTemp, vertexArrSize * sizeof(uint));
+    GPU_MALLOC(&resultD, grid.x * sizeof(uint), "resultD");
+    GPU_MALLOC(&prefixSumTemp, vertexArrSize * sizeof(uint), "prefixSumTemp");
     //uint* tempResult = new uint[grid.x];
     //memset(tempResult, 0, sizeof(int) * grid.x);
     //cudaMemcpy(resultD, tempResult, grid.x * sizeof(int), cudaMemcpyHostToDevice);
@@ -441,39 +494,39 @@ void GraphMeta<EdgeType>::initGraphDevice() {
     //pre store
     TimeRecord<chrono::milliseconds> preMoveTimer("pre move data");
     preMoveTimer.startRecord();
-    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(EdgeType)));
+    GPU_MALLOC(&staticEdgeListD, max_partition_size * sizeof(EdgeType), "staticEdgeListD");
     gpuErrorcheck(cudaMemcpy(staticEdgeListD, edgeArray, max_partition_size * sizeof(EdgeType), cudaMemcpyHostToDevice));
     preMoveTimer.endRecord();
     preMoveDataTime = preMoveTimer.getDuration();
     preMoveTimer.print();
     preMoveTimer.clearRecord();
 
-    cudaMalloc(&isInStaticD, vertexArrSize * sizeof(bool));
-    cudaMalloc(&overloadNodeListD, vertexArrSize * sizeof(SIZE_TYPE));
-    cudaMalloc(&staticNodeListD, vertexArrSize * sizeof(SIZE_TYPE));
-   
-    cudaMalloc(&staticNodePointerD, (max_static_node+1) * sizeof(EDGE_POINTER_TYPE));
+    GPU_MALLOC(&isInStaticD, vertexArrSize * sizeof(bool), "isInStaticD");
+    GPU_MALLOC(&overloadNodeListD, vertexArrSize * sizeof(SIZE_TYPE), "overloadNodeListD");
+    GPU_MALLOC(&staticNodeListD, vertexArrSize * sizeof(SIZE_TYPE), "staticNodeListD");
+
+    GPU_MALLOC(&staticNodePointerD, (max_static_node+1) * sizeof(EDGE_POINTER_TYPE), "staticNodePointerD");
     gpuErrorcheck(cudaMemcpy(staticNodePointerD, staticNodePointer, (max_static_node+1) * sizeof(EDGE_POINTER_TYPE), cudaMemcpyHostToDevice));
     gpuErrorcheck(cudaPeekAtLastError());
     cudaMemcpy(isInStaticD, isInStatic, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
     //test new model
-    if(model==OLD_MODEL)
-    cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(EdgeType));
-    else{
-        gpuErrorcheck(cudaMalloc(&nodePointersD, vertexArrSize*sizeof(EDGE_POINTER_TYPE)));
+    if(model==OLD_MODEL) {
+        GPU_MALLOC(&overloadEdgeListD, partOverloadSize * sizeof(EdgeType), "overloadEdgeListD");
+    } else{
+        GPU_MALLOC(&nodePointersD, vertexArrSize*sizeof(EDGE_POINTER_TYPE), "nodePointersD");
         cudaMemcpy(nodePointersD,nodePointers,vertexArrSize*sizeof(EDGE_POINTER_TYPE),cudaMemcpyHostToDevice);
     }
-    cudaMalloc(&degreeD, vertexArrSize * sizeof(SIZE_TYPE));
-    cudaMalloc(&isActiveD, vertexArrSize * sizeof(bool));
-    cudaMalloc(&isStaticActive, vertexArrSize * sizeof(bool));
-    cudaMalloc(&isOverloadActive, vertexArrSize * sizeof(bool));
+    GPU_MALLOC(&degreeD, vertexArrSize * sizeof(SIZE_TYPE), "degreeD");
+    GPU_MALLOC(&isActiveD, vertexArrSize * sizeof(bool), "isActiveD");
+    GPU_MALLOC(&isStaticActive, vertexArrSize * sizeof(bool), "isStaticActive");
+    GPU_MALLOC(&isOverloadActive, vertexArrSize * sizeof(bool), "isOverloadActive");
     //cudaMalloc(&activeNodeLabelingPrefixD, vertexArrSize * sizeof(SIZE_TYPE));
     //cudaMalloc(&overloadLabelingPrefixD, vertexArrSize * sizeof(SIZE_TYPE));
  
     //cudaMalloc(&activeNodeListD, vertexArrSize * sizeof(SIZE_TYPE));
     if(model!=7){
-        cudaMalloc(&activeOverloadNodePointersD, vertexArrSize * sizeof(EDGE_POINTER_TYPE));
-        cudaMalloc(&activeOverloadDegreeD, vertexArrSize * sizeof(EDGE_POINTER_TYPE));
+        GPU_MALLOC(&activeOverloadNodePointersD, vertexArrSize * sizeof(EDGE_POINTER_TYPE), "activeOverloadNodePointersD");
+        GPU_MALLOC(&activeOverloadDegreeD, vertexArrSize * sizeof(EDGE_POINTER_TYPE), "activeOverloadDegreeD");
     }
     cudaMemcpy(degreeD, degree, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     cudaMemcpy(isActiveD, label, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
@@ -481,11 +534,11 @@ void GraphMeta<EdgeType>::initGraphDevice() {
     cudaMemset(isOverloadActive, 0, vertexArrSize * sizeof(bool));
     if(algType == PR) {
         
-            cudaMalloc(&outDegreeD, vertexArrSize * sizeof(SIZE_TYPE));
+            GPU_MALLOC(&outDegreeD, vertexArrSize * sizeof(SIZE_TYPE), "outDegreeD");
             cudaMemcpy(outDegreeD, outDegree, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
-            cudaMalloc(&valuePrD, vertexArrSize * sizeof(double));
+            GPU_MALLOC(&valuePrD, vertexArrSize * sizeof(double), "valuePrD");
             cudaMemcpy(valuePrD, valuePr, vertexArrSize * sizeof(double), cudaMemcpyHostToDevice);
-            cudaMalloc(&sumD, vertexArrSize * sizeof(double));
+            GPU_MALLOC(&sumD, vertexArrSize * sizeof(double), "sumD");
             cudaMemset(sumD, 0, vertexArrSize * sizeof(double));
             //cudaMalloc(&Diff,vertexArrSize*sizeof(double));
             //cudaMemset(Diff,0.0,vertexArrSize*sizeof(double));
@@ -493,7 +546,7 @@ void GraphMeta<EdgeType>::initGraphDevice() {
             //DiffDThrust = thrust::device_ptr<double>(Diff);
         
     } else {
-        cudaMalloc(&valueD, vertexArrSize * sizeof(SIZE_TYPE));
+        GPU_MALLOC(&valueD, vertexArrSize * sizeof(SIZE_TYPE), "valueD");
         cudaMemcpy(valueD, value, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     }
     activeLablingThrust = thrust::device_ptr<bool>(isActiveD);
@@ -502,6 +555,7 @@ void GraphMeta<EdgeType>::initGraphDevice() {
     if(model!=7)
     actOverDegreeThrust = thrust::device_ptr<EDGE_POINTER_TYPE>(activeOverloadDegreeD);
     gpuErrorcheck(cudaPeekAtLastError());
+    g_gpuMemTracker.printSummary();
     cout << "initGraphDevice() end" << endl;
 }
 
@@ -528,19 +582,29 @@ void GraphMeta<EdgeType>::getMaxPartitionSize() {
     if(gpuMemoryLimitBytes > 0 && gpuMemoryLimitBytes < availMemory){
         cout << "GPU memory limit set to " << gpuMemoryLimitBytes / (1024.0*1024.0*1024.0) << " GB" << endl;
         availMemory = gpuMemoryLimitBytes;
+        g_gpuMemTracker.setBudget(gpuMemoryLimitBytes);
+    } else {
+        g_gpuMemTracker.setBudget(availMemory);
     }
-    unsigned long reduceMem;
+    g_gpuMemTracker.totalAllocated = 0; // reset for this run
+    size_t reduceMem;
     if(algType==PR){
-        reduceMem = (paramSize-2) * sizeof(SIZE_TYPE) * (long) vertexArrSize;
-        reduceMem += sizeof(double) * 2 * (long)vertexArrSize;
+        reduceMem = (size_t)(paramSize-2) * sizeof(SIZE_TYPE) * (size_t) vertexArrSize;
+        reduceMem += sizeof(double) * 2 * (size_t)vertexArrSize;
     }
     else
-    reduceMem = paramSize * sizeof(SIZE_TYPE) * (long) vertexArrSize + vertexArrSize*sizeof(EDGE_POINTER_TYPE);
+    reduceMem = (size_t)paramSize * sizeof(SIZE_TYPE) * (size_t) vertexArrSize + (size_t)vertexArrSize*sizeof(EDGE_POINTER_TYPE);
 
     cout << "reduceMem " << reduceMem  << " ParamsSize " << paramSize << endl;
-    cout << "availMemory " << availMemory << " totalMemory " << totalMemory << endl;     
-    cout << "available memory for edges "<< (availMemory - reduceMem) << " sizeof EdgeType is "<<sizeof(EdgeType)<<endl;
-    total_gpu_size = (availMemory - reduceMem) / sizeof(EdgeType);
+    cout << "availMemory " << availMemory << " totalMemory " << totalMemory << endl;
+    if (reduceMem >= availMemory) {
+        cout << "WARNING: per-vertex arrays (" << reduceMem / (1024.0*1024.0) << " MB) exceed available GPU memory ("
+             << availMemory / (1024.0*1024.0) << " MB). Setting edge partition to minimum." << endl;
+        total_gpu_size = 0;
+    } else {
+        cout << "available memory for edges "<< (availMemory - reduceMem) << " sizeof EdgeType is "<<sizeof(EdgeType)<<endl;
+        total_gpu_size = (availMemory - reduceMem) / sizeof(EdgeType);
+    }
     cout<<"total_gpu_size: "<<total_gpu_size<<endl;
     //getchar();
     //float adviseK = (10 - (float) edgeListSize / (float) totalSize) / 9;
@@ -571,9 +635,9 @@ void GraphMeta<EdgeType>::getMaxPartitionSize() {
                 cout<<"GPU fill all the edges!!!"<<endl;
             }
             
-            printf("static memory is %ld  max static edge size is %ld\n gpu total edge size %ld \n",
-                availMemory - reduceMem,
-                max_partition_size, 
+            printf("static memory is %zu  max static edge size is %lu\n gpu total edge size %lu \n",
+                (reduceMem < availMemory) ? (availMemory - reduceMem) : 0,
+                max_partition_size,
                 total_gpu_size);
             if (max_partition_size > UINT_MAX) {
                 printf("bigger than DIST_INFINITY\n");

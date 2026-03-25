@@ -1,6 +1,7 @@
 #include "CalculateOpt.cuh"
+#include "cpu_verify.cuh"
 
-void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit){
+void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify){
     cout << "======NEW_bfs_opt=======" << endl;
     cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<uint> graph;
@@ -195,9 +196,14 @@ void newbfs_opt(string path, uint sourceNode, double adviseRate,int model, int t
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     //cout<<"average transfer data: "<<overloadsize/testTimes<<" GB"<<endl;
+    if (verify) {
+        cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+        cudaDeviceSynchronize();
+        cpu_verify_bfs(graph.nodePointers, (uint *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, sourceNode, graph.value);
+    }
 }
 
-void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit){
+void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify){
     cout << "======NEW_cc_opt=======" << endl;
     //cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<uint> graph;
@@ -394,9 +400,14 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes, double gp
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     //cout<<"average transfer data: "<<overloadsize/testTimes<<" GB"<<endl;
+    if (verify) {
+        cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+        cudaDeviceSynchronize();
+        cpu_verify_cc(graph.nodePointers, (uint *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, graph.value);
+    }
 }
 
-void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit){
+void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify){
     cout << "========NEW_sssp_opt==========" << endl;
     GraphMeta<EdgeWithWeight> graph;
     graph.setAlgType(SSSP);
@@ -538,10 +549,14 @@ void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int t
     cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("newsssp.txt");
-
+    if (verify) {
+        cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+        cudaDeviceSynchronize();
+        cpu_verify_sssp(graph.nodePointers, graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, sourceNode, graph.value);
+    }
 }
 
-void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit){
+void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify){
     cout<<"========NEW_pr_opt==========="<<endl;
     GraphMeta<unsigned long long> graph;
     graph.setAlgType(PR);
@@ -696,4 +711,15 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
     //cout<<"Average overloadSize: "<<overloadsize/testTimes<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("Liberator_PR_GSHll_res.txt");
+    if (verify) {
+        cudaMemcpy(graph.valuePr, graph.valuePrD, graph.vertexArrSize * sizeof(double), cudaMemcpyDeviceToHost);
+        cudaDeviceSynchronize();
+        // Convert unsigned long long edge list to uint for CPU verification
+        uint *edgeListUint = new uint[graph.edgeArrSize];
+        #pragma omp parallel for
+        for (EDGE_POINTER_TYPE i = 0; i < graph.edgeArrSize; i++)
+            edgeListUint[i] = (uint)graph.edgeArray[i];
+        cpu_verify_pr(graph.nodePointers, edgeListUint, graph.outDegree, graph.vertexArrSize, graph.edgeArrSize, graph.valuePr);
+        delete[] edgeListUint;
+    }
 }

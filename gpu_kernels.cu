@@ -468,9 +468,13 @@ cc_kernel(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD
         uint edgeIndex = nodePointersD[id];
         uint sourceValue = valueD[id];
         for (uint i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
-            if (sourceValue < valueD[edgeListD[i]]) {
+            uint destValue = valueD[edgeListD[i]];
+            if (sourceValue < destValue) {
                 atomicMin(&valueD[edgeListD[i]], sourceValue);
                 labelD[edgeListD[i]] = true;
+            } else if (destValue < sourceValue) {
+                atomicMin(&valueD[id], destValue);
+                labelD[id] = true;
             }
         }
     });
@@ -486,9 +490,13 @@ ccKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const bo
             uint edgeIndex = nodePointersD[nodeIndex] - offset;
             uint sourceValue = valueD[nodeIndex];
             for (uint i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
-                if (sourceValue < valueD[edgeListD[i]]) {
+                uint destValue = valueD[edgeListD[i]];
+                if (sourceValue < destValue) {
                     atomicMin(&valueD[edgeListD[i]], sourceValue);
                     nextActiveNodeListD[edgeListD[i]] = true;
+                } else if (destValue < sourceValue) {
+                    atomicMin(&valueD[nodeIndex], destValue);
+                    nextActiveNodeListD[nodeIndex] = true;
                 }
             }
         }
@@ -838,9 +846,13 @@ cc_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degr
             } else {
                 vertexId = edgeListD[edgeIndex + i];
             }
-            if (sourceValue < valueD[vertexId]) {
+            uint destValue = valueD[vertexId];
+            if (sourceValue < destValue) {
                 atomicMin(&valueD[vertexId], sourceValue);
                 labelD[vertexId] = true;
+            } else if (destValue < sourceValue) {
+                atomicMin(&valueD[id], destValue);
+                labelD[id] = true;
             }
         }
     });
@@ -858,9 +870,14 @@ cc_kernelStaticSwapOpt2Label(uint activeNodesNum, uint *activeNodeListD,
             uint sourceValue = valueD[id];
             for (uint i = 0; i < degreeD[id]; i++) {
                 uint vertexId = edgeListD[edgeIndex + i];
-                if (sourceValue < valueD[vertexId]) {
+                uint destValue = valueD[vertexId];
+                if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD2[vertexId] = 1;
+                    *isFinish = false;
+                } else if (destValue < sourceValue) {
+                    atomicMin(&valueD[id], destValue);
+                    isActiveD2[id] = 1;
                     *isFinish = false;
                 }
             }
@@ -879,9 +896,13 @@ cc_kernelStaticSwapOpt(uint activeNodesNum, uint *activeNodeListD,
         uint sourceValue = valueD[id];
         for (uint i = 0; i < degreeD[id]; i++) {
             uint vertexId = edgeListD[edgeIndex + i];
-            if (sourceValue < valueD[vertexId]) {
+            uint destValue = valueD[vertexId];
+            if (sourceValue < destValue) {
                 atomicMin(&valueD[vertexId], sourceValue);
                 isActiveD[vertexId] = 1;
+            } else if (destValue < sourceValue) {
+                atomicMin(&valueD[id], destValue);
+                isActiveD[id] = 1;
             }
         }
     });
@@ -943,10 +964,15 @@ cc_kernelDynamicAsync(uint overloadStartNode, uint overloadNodeNum, const uint *
             for (uint i = 0; i < degreeD[id]; i++) {
                 uint vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                                   activeOverloadNodePointersD[overloadStartNode] + i];
-                if (sourceValue < valueD[vertexId]) {
+                uint destValue = valueD[vertexId];
+                if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     *finished = false;
                     labelD2[vertexId] = 1;
+                } else if (destValue < sourceValue) {
+                    atomicMin(&valueD[id], destValue);
+                    *finished = false;
+                    labelD2[id] = 1;
                 }
             }
         }
@@ -969,9 +995,14 @@ cc_kernelDynamicSwap2Label(uint overloadStartNode, uint overloadNodeNum, const u
             for (uint i = 0; i < degreeD[id]; i++) {
                 uint vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                                   activeOverloadNodePointersD[overloadStartNode] + i];
-                if (sourceValue < valueD[vertexId]) {
+                uint destValue = valueD[vertexId];
+                if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD2[vertexId] = 1;
+                    *finished = false;
+                } else if (destValue < sourceValue) {
+                    atomicMin(&valueD[id], destValue);
+                    isActiveD2[id] = 1;
                     *finished = false;
                 }
             }

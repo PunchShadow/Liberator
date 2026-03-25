@@ -659,9 +659,13 @@ cc_kernelStaticSwap(uint activeNodesNum, uint *activeNodeListD,
             uint sourceValue = valueD[id];
             for (uint i = 0; i < degreeD[id]; i++) {
                 uint vertexId = edgeListD[edgeIndex + i];
-                if (sourceValue < valueD[vertexId]) {
+                uint destValue = valueD[vertexId];
+                if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD[vertexId] = 1;
+                } else if (destValue < sourceValue) {
+                    atomicMin(&valueD[id], destValue);
+                    isActiveD[id] = 1;
                 }
             }
         }
@@ -682,9 +686,13 @@ cc_kernelDynamicSwap(uint overloadStartNode, uint overloadNodeNum, const uint *o
         for (uint i = 0; i < degreeD[id]; i++) {
             uint vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                               activeOverloadNodePointersD[overloadStartNode] + i];
-            if (sourceValue < valueD[vertexId]) {
+            uint destValue = valueD[vertexId];
+            if (sourceValue < destValue) {
                 atomicMin(&valueD[vertexId], sourceValue);
                 isActiveD[vertexId] = 1;
+            } else if (destValue < sourceValue) {
+                atomicMin(&valueD[id], destValue);
+                isActiveD[id] = 1;
             }
         }
     });
@@ -708,9 +716,13 @@ cc_kernelDynamicSwap_test(uint overloadNodeNum, const uint *overloadNodeListD, c
         for(uint i = laneIdx+shift_start;i<end;i+=WARP_SIZE){
             if(i>=start){
                 uint vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] + i];
-                if (sourceValue < valueD[vertexId]) {
+                uint destValue = valueD[vertexId];
+                if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD[vertexId] = 1;
+                } else if (destValue < sourceValue) {
+                    atomicMin(&valueD[id], destValue);
+                    isActiveD[id] = 1;
                 }
             }
         }
@@ -736,15 +748,15 @@ NEW_cc_kernelDynamicSwap_test(uint overloadNodeNum, const uint *overloadNodeList
 
             for(uint i = laneIdx+shift_start;i<end;i+=WARP_SIZE){
                 uint vertexId = edgeList[i];
-                if(i>=start&&i<end){   
-                    uint tar_value = valueD[vertexId]; 
+                if(i>=start&&i<end){
+                    uint tar_value = valueD[vertexId];
                     if (sourceValue < tar_value) {
-                        //下面两行都注释掉不会出现越界
-                        //只注释掉atomicMin会越界
                         atomicMin(&valueD[vertexId], sourceValue);
-                        //只注释isActiveD这一行也会越界
                         isActiveD[vertexId] = 1;
-                    }              
+                    } else if (tar_value < sourceValue) {
+                        atomicMin(&valueD[id], tar_value);
+                        isActiveD[id] = 1;
+                    }
                 }
             }
     }

@@ -8,15 +8,15 @@ int main(int argc, char** argv) {
 	memset(&devicePropDefined, 0, sizeof(cudaDeviceProp));  //设置devicepropDefined的值
 	devicePropDefined.major = 6;
 	devicePropDefined.minor = 0;
- 
+
 	int devicedChoosed;  //选中的设备ID
-	
+
 	cudaError_t cudaError;
 	cudaChooseDevice(&devicedChoosed, &devicePropDefined);  //查找符合要求的设备ID
 	cout << "满足指定属性要求的设备的编号: " << devicedChoosed << endl;
- 
+
 	cudaError = cudaSetDevice(devicedChoosed); //设置选中的设备为下文的运行设备
- 
+
 	if (cudaError == cudaSuccess)
 		cout << "设备选取成功!" << endl;
 	else
@@ -31,31 +31,33 @@ int main(int argc, char** argv) {
     if (arguments.gpuMemoryLimit > 0) {
         cout << "GPU memory limit: " << arguments.gpuMemoryLimit << " GB" << endl;
     }
+    if (arguments.verify) {
+        cout << "CPU verification enabled" << endl;
+    }
     if (arguments.algo == "bfs") {
         cout << "arguments.algo " << arguments.algo << endl;
     cout<<"arguments.sourceNode "<<arguments.sourceNode<<endl;
         if(arguments.model==7)
-        newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes, arguments.gpuMemoryLimit);
+        newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
         else
-        bfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        bfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "cc") {
         if(arguments.model==7)
-        //newcc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
-        New_CC_opt(arguments.input,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        //newcc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
+        New_CC_opt(arguments.input,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
         else
-        cc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        cc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "sssp") {
         if(arguments.model==7)
-        newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
         else
-        sssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        sssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "pr") {
         if(arguments.model==7)
-        newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
         else
-        pr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit);
+        pr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     }
-    
+
     return 0;
 }
-

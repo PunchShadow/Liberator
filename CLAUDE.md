@@ -33,6 +33,7 @@ g++ -o converter converter.cpp
   --source <node-id>       # BFS/SSSP only, default 0
   --model <0|7>            # 0 = Ascetic (baseline), 7 = Liberator
   --testTime <n>           # number of runs, default 1
+  --gpuMemoryLimit <GB>    # artificial GPU memory cap in GB (0 = use actual GPU memory)
 ```
 
 ## Input Formats
@@ -49,12 +50,15 @@ All source files are in the project root (flat structure, no `src/` directory).
 
 - **`main.cu`** — Entry point. Selects algorithm and model, dispatches to `*_opt` or `new*_opt` functions.
 - **`CalculateOpt.cu/.cuh`** — Algorithm orchestration. Contains both baseline (`bfs_opt`, `cc_opt`, `sssp_opt`, `pr_opt`) and Liberator (`newbfs_opt`, `newcc_opt`, `newsssp_opt`, `newpr_opt`) implementations. The `new*` variants use data reuse optimizations.
-- **`NewCalculateOpt.cu`** — Additional Liberator-model algorithm implementations.
+- **`NewCalculateOpt.cu`** — Additional Liberator-model algorithm implementations (included transitively via `CalculateOpt.cuh`).
 - **`New_CC_opt.cuh`** — Liberator-specific CC implementation (`New_CC_opt` function).
+- **`bfs.cu/.cuh`, `cc.cu/.cuh`, `sssp.cu/.cuh`** — Standalone algorithm implementations with multiple variants (convention, share, async, UVM). These predate the unified `CalculateOpt` orchestration and contain lower-level partition-processing logic.
+- **`bfs-sync.cuh`** — Synchronous BFS variant.
 - **`GraphMeta.cu/.cuh`** — Core `GraphMeta<EdgeType>` template class managing graph data, GPU memory allocation, partition management, and host-device transfers.
 - **`gpu_kernels.cu/.cuh`** — CUDA kernels for each algorithm (`bfs_kernel`, `cc_kernel`, `sssp_kernel`, `pr_kernel`) plus overload/subgraph variants.
 - **`common.cu/.cuh`** — Partitioning helpers, degree calculation, edge list overload management, and data recording utilities.
 - **`globals.cuh`** — Type definitions (`SIZE_TYPE`, `EDGE_POINTER_TYPE`, `EdgeWithWeight`, `FragmentData`) and algorithm enum.
+- **`tools.cuh`** — Miscellaneous utility helpers.
 - **`ArgumentParser.cu/.cuh`** — CLI argument parsing (key-value pairs with `--` prefix).
 - **`TimeRecord.cu/.cuh`** — GPU timing via CUDA events.
 - **`range.cuh`** — Python-like range utility used in GPU grid-stride loops.

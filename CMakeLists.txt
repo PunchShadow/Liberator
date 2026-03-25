@@ -14,4 +14,5 @@ set_target_properties(
         CUDA_SEPARABLE_COMPILATION ON
         CUDA_ARCHITECTURES "86")
 
-target_link_libraries(ptGraph -lcublas -lcurand)
+target_compile_options(ptGraph PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-fopenmp>)
+target_link_libraries(ptGraph -lcublas -lcurand -lgomp)
