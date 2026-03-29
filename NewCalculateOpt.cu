@@ -434,6 +434,9 @@ void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int t
     totalProcess.print();
     totalProcess.clearRecord();
     uint src = graph.sourceNode;
+    long totalduration = 0;
+    long staticduration = 0;
+    long overloaduration = 0;
     uint64_t numthreads = 1024;
     uint64_t numblocks = ((graph.vertexArrSize * WARP_SIZE + numthreads) / numthreads);
     dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
@@ -541,12 +544,19 @@ void newsssp_opt(string path, uint sourceNode, double adviseRate,int model,int t
         //overloadGB += (double)overloadedges*sizeof(uint)/1024/1024/1024;
         //cout<<" transfer data: "<<(double)overloadedges*sizeof(uint)/1024/1024/1024<<" GB"<<endl;
         src+=graph.vertexArrSize/testTimes;
+        totalduration+=totalProcess.getDuration();
+        staticduration+=staticProcess.getDuration();
+        overloaduration+=overloadProcess.getDuration();
         totalProcess.clearRecord();
         staticProcess.clearRecord();
         overloadProcess.clearRecord();
     }
     //cout<<"Total overloadsize: "<<overloadGB<<" GB"<<endl;
+    cout<<"========TEST OVER========"<<endl;
     cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"Test over, average total process time (including pre move data): "<<totalduration/testTimes + graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
+    cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("newsssp.txt");
     if (verify) {
@@ -703,11 +713,11 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
         //cout<<"transfer "<<temp<<" GB"<<endl;
         //overloadsize+=temp;
     }
-    cout<<"=================PR test end================="<<endl;
+    cout<<"========TEST OVER========"<<endl;
     cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
-    cout<<"Average static time: "<<Static/testTimes<<endl;
-    cout<<"Average overload time: "<<Overload/testTimes<<endl;
-    cout<<"Average Total time (including pre move data): "<<Total/testTimes + graph.preMoveDataTime<<endl;
+    cout<<"Test over, average total process time (including pre move data): "<<Total/testTimes + graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"average static process time: "<<Static/testTimes<<"ms"<<endl;
+    cout<<"average overload process time: "<<Overload/testTimes<<"ms"<<endl;
     //cout<<"Average overloadSize: "<<overloadsize/testTimes<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("Liberator_PR_GSHll_res.txt");

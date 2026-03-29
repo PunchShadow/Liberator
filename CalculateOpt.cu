@@ -583,6 +583,8 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
     TimeRecord<chrono::milliseconds> totalProcess("totalProcess");
     TimeRecord<chrono::milliseconds> forULLProcess("forULLProcess");
     TimeRecord<chrono::milliseconds> overloadMoveProcess("overloadMoveProcess");
+    TimeRecord<chrono::milliseconds> staticProcess("staticProcess");
+    TimeRecord<chrono::milliseconds> overloadProcess("overloadProcess");
     totalProcess.startRecord();
     uint activeNodesNum;
     activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
@@ -593,6 +595,9 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
     totalProcess.clearRecord();
     EDGE_POINTER_TYPE overloadEdges = 0;
     uint src = graph.sourceNode;
+    long totalduration = 0;
+    long staticduration = 0;
+    long overloaduration = 0;
     for (int testIndex = 0; testIndex < testTimes; testIndex++) {
         cout<<"================="<<"testIndex "<<testIndex<<"================="<<endl;
         cout<<"source: "<<src<<endl;
@@ -682,6 +687,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
                                                                                       graph.isActiveD);
             }
 
+            staticProcess.startRecord();
             sssp_kernel<<<graph.grid, graph.block, 0, graph.steamStatic>>>(staticNodeNum, graph.staticNodeListD,
                                                                            graph.staticNodePointerD, graph.degreeD,
                                                                            graph.staticEdgeListD, graph.valueD,
@@ -699,7 +705,9 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
                     graph.caculatePartInfoForEdgeList(overloadNodeNum, overloadEdgeNum);
                 }
                 cudaDeviceSynchronize();
+                staticProcess.endRecord();
 
+                overloadProcess.startRecord();
                 if(model==OLD_MODEL){
                     for (int i = 0; i < graph.partEdgeListInfoArr.size(); i++) {
                         //cout << "graph.partEdgeListInfoArr[i].partEdgeNums " << graph.partEdgeListInfoArr[i].partEdgeNums << endl;
@@ -747,9 +755,11 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
                     gpuErrorcheck(cudaPeekAtLastError());
                     cudaDeviceSynchronize();
                 }
+                overloadProcess.endRecord();
 
             } else {
                 cudaDeviceSynchronize();
+                staticProcess.endRecord();
             }
             
             activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize,
@@ -771,17 +781,28 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
         totalProcess.endRecord();
         cout<<"total iter: "<<iter<<endl;
         totalProcess.print();
+        staticProcess.print();
+        overloadProcess.print();
         forULLProcess.print();
         overloadMoveProcess.print();
         cout << "nodeSum : " << nodeSum << endl;
         cout << "move overload size : " << overloadEdges * sizeof(EdgeWithWeight) << endl;
         src+=graph.vertexArrSize/testTimes;
+        totalduration+=totalProcess.getDuration();
+        staticduration+=staticProcess.getDuration();
+        overloaduration+=overloadProcess.getDuration();
         totalProcess.clearRecord();
+        staticProcess.clearRecord();
+        overloadProcess.clearRecord();
         forULLProcess.clearRecord();
         overloadMoveProcess.clearRecord();
 
     }
+    cout<<"========TEST OVER========"<<endl;
     cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"Test over, average total process time (including pre move data): "<<totalduration/testTimes + graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
+    cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("oldsssp.txt");
     if (verify) {
@@ -992,11 +1013,11 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
         // cout << "move overload size : " << temp <<" GB" << endl;
         // overloadSize+=temp;
     }
-    cout<<"=================PR test end================="<<endl;
+    cout<<"========TEST OVER========"<<endl;
     cout<<"pre move data time: "<<graph.preMoveDataTime<<"ms"<<endl;
-    cout<<"Average static time: "<<Static/testTimes<<endl;
-    cout<<"Average overload time: "<<Overload/testTimes<<endl;
-    cout<<"Average Total time (including pre move data): "<<Total/testTimes + graph.preMoveDataTime<<endl;
+    cout<<"Test over, average total process time (including pre move data): "<<Total/testTimes + graph.preMoveDataTime<<"ms"<<endl;
+    cout<<"average static process time: "<<Static/testTimes<<"ms"<<endl;
+    cout<<"average overload process time: "<<Overload/testTimes<<"ms"<<endl;
     //cout<<"Avsrage transfer data "<<overloadSize/testTimes<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
     cudaMemcpy(graph.valuePr,graph.valuePrD,graph.vertexArrSize*sizeof(double),cudaMemcpyDeviceToHost);

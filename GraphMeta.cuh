@@ -18,6 +18,8 @@
 #include <thrust/functional.h>
 #include <thrust/sort.h>
 #include <thread>
+#include <type_traits>
+#include <cstring>
 #include "TimeRecord.cuh"
 #include "globals.cuh"
 
@@ -267,6 +269,11 @@ void GraphMeta<EdgeType>::readDataFromFile(const string &fileName, bool isPagera
     cout << "readDataFromFile " << duration << " ms" << endl;
 }
 
+static inline bool endsWith(const string &str, const string &suffix) {
+    if (suffix.size() > str.size()) return false;
+    return str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
 template<class EdgeType>
 void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagerank) {
     cout << "readDataFromBCSR (Subway format)" << endl;
@@ -285,27 +292,70 @@ void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagera
     this->edgeArrSize = num_edges;
     cout << "vertex num: " << this->vertexArrSize << " edge num: " << this->edgeArrSize << endl;
 
-    // For PageRank, bcsr has no outDegree section; compute from nodePointers later
-    // First read uint32 nodePointers and widen to EDGE_POINTER_TYPE
+    // Read uint32 nodePointers and widen to EDGE_POINTER_TYPE
     uint *nodePointersU32 = new uint[num_nodes];
     infile.read((char *) nodePointersU32, sizeof(uint) * num_nodes);
 
-    if(model == 7) {
-        nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
-        for (uint i = 0; i < num_nodes; i++) {
-            nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
-        }
-        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(EdgeType) * edgeArrSize));
-        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
-    } else {
-        nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
-        for (uint i = 0; i < num_nodes; i++) {
-            nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
-        }
-        edgeArray = new EdgeType[edgeArrSize];
-        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
+    nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
+    for (uint i = 0; i < num_nodes; i++) {
+        nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
     }
     delete[] nodePointersU32;
+
+    // Allocate edge array
+    if (model == 7) {
+        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(EdgeType) * edgeArrSize));
+    } else {
+        edgeArray = new EdgeType[edgeArrSize];
+    }
+
+    // Detect format mismatch between file and EdgeType, convert if needed
+    bool fileIsWeighted = endsWith(fileName, ".bwcsr");
+    const size_t CHUNK = 1 << 20; // 1M edges per chunk
+
+    if (fileIsWeighted && !std::is_same<EdgeType, EdgeWithWeight>::value) {
+        // .bwcsr file but EdgeType has no weight (e.g., uint for BFS/CC/PR)
+        // Read EdgeWithWeight pairs, extract toNode only
+        cout << "Auto-converting: .bwcsr -> stripping weights" << endl;
+        EdgeWithWeight *buf = new EdgeWithWeight[CHUNK];
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(EdgeWithWeight) * n);
+            for (size_t i = 0; i < n; i++) {
+                memset(&edgeArray[offset + i], 0, sizeof(EdgeType));
+                memcpy(&edgeArray[offset + i], &buf[i].toNode, sizeof(uint));
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
+    } else if (!fileIsWeighted && std::is_same<EdgeType, EdgeWithWeight>::value) {
+        // .bcsr file but EdgeType is EdgeWithWeight (SSSP)
+        // Read uint toNode, set default weight = 1
+        cout << "Auto-converting: .bcsr -> adding default weight=1" << endl;
+        uint *buf = new uint[CHUNK];
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(uint) * n);
+            for (size_t i = 0; i < n; i++) {
+                EdgeWithWeight ew;
+                ew.toNode = buf[i];
+                ew.weight = 1;
+                memcpy(&edgeArray[offset + i], &ew, sizeof(EdgeType));
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
+    } else {
+        // Format matches EdgeType, direct read
+        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
+    }
+
     infile.close();
 
     // For PageRank, compute outDegree from nodePointers
@@ -320,11 +370,6 @@ void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagera
     auto endTime = chrono::steady_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime).count();
     cout << "readDataFromBCSR " << duration << " ms" << endl;
-}
-
-static inline bool endsWith(const string &str, const string &suffix) {
-    if (suffix.size() > str.size()) return false;
-    return str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 template<class EdgeType>
