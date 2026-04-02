@@ -23,6 +23,17 @@
 #include "TimeRecord.cuh"
 #include "globals.cuh"
 
+// Helper: assign a uint64 value to EdgeType, handling EdgeWithWeight specially
+template <typename EdgeType>
+inline void assignEdgeFromU64(EdgeType &dst, uint64_t val, uint64_t weight = 1) {
+    dst = static_cast<EdgeType>(val);
+}
+template <>
+inline void assignEdgeFromU64<EdgeWithWeight>(EdgeWithWeight &dst, uint64_t val, uint64_t weight) {
+    dst.toNode = val;
+    dst.weight = weight;
+}
+
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true) {
     if (code != cudaSuccess) {
         fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
@@ -125,7 +136,7 @@ public:
     SIZE_TYPE *outDegree;
     SIZE_TYPE *degree;
     bool *label;
-    double *valuePr;
+    float *valuePr;
     SIZE_TYPE *value;
     bool *isInStatic;
     SIZE_TYPE *overloadNodeList;
@@ -134,9 +145,9 @@ public:
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     EdgeType *overloadEdgeList;//no need for model 7
     //GPU
-    uint *resultD;
+    SIZE_TYPE *resultD;
     cudaStream_t steamStatic, streamDynamic;
-    uint *prefixSumTemp;
+    SIZE_TYPE *prefixSumTemp;
     EdgeType *staticEdgeListD;
     EdgeType *overloadEdgeListD;//no need for model 7
     bool *isInStaticD;
@@ -154,11 +165,11 @@ public:
     bool *isStaticActive;
     bool *isOverloadActive;
     SIZE_TYPE *valueD;
-    double *valuePrD;
-    double *sumD;
-    //double *Diff;
-    thrust::device_ptr<double> sumDThrust;
-    thrust::device_ptr<double> DiffDThrust;
+    float *valuePrD;
+    float *sumD;
+    //float *Diff;
+    thrust::device_ptr<float> sumDThrust;
+    thrust::device_ptr<float> DiffDThrust;
     //SIZE_TYPE *activeNodeListD;
     //SIZE_TYPE *activeNodeLabelingPrefixD;
     //SIZE_TYPE *overloadLabelingPrefixD;
@@ -173,6 +184,8 @@ public:
     void readDataFromFile(const string &fileName, bool isPagerank);
 
     void readDataFromBCSR(const string &fileName, bool isPagerank);
+
+    void readDataFromBCSR64(const string &fileName, bool isPagerank);
 
     void readGraph(const string &fileName, bool isPagerank);
 
@@ -201,7 +214,7 @@ public:
         this->sourceNode = sourceNode;
     }
 
-    void fillEdgeArrByMultiThread(uint overloadNodeSize);
+    void fillEdgeArrByMultiThread(SIZE_TYPE overloadNodeSize);
 
     void caculatePartInfoForEdgeList(SIZE_TYPE overloadNodeNum, EDGE_POINTER_TYPE overloadEdgeNum);
     void checkNode(SIZE_TYPE node);
@@ -242,17 +255,19 @@ void GraphMeta<EdgeType>::readDataFromFile(const string &fileName, bool isPagera
     cout << "vertex num: " << this->vertexArrSize << " edge num: " << this->edgeArrSize << endl;
     if (isPagerank) {
         outDegree = new SIZE_TYPE [vertexArrSize];
-        infile.read((char *) outDegree, sizeof(uint) * vertexArrSize);
+        uint *outDegreeU32 = new uint[vertexArrSize];
+        infile.read((char *) outDegreeU32, sizeof(uint) * vertexArrSize);
+        for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
+            outDegree[i] = (SIZE_TYPE) outDegreeU32[i];
+        }
+        delete[] outDegreeU32;
     }
     if(model==7) {
-        //gpuErrorcheck(cudaMallocHost(&nodePointers, sizeof(EdgeType)*vertexArrSize));
-        //gpuErrorcheck(cudaMallocManaged(&nodePointers,sizeof(EDGE_POINTER_TYPE)*vertexArrSize));
-        //gpuErrorcheck(cudaMemAdvise(nodePointers,vertexArrSize*sizeof(EDGE_POINTER_TYPE),cudaMemAdviseSetAccessedBy,0));
         nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
         infile.read((char *) nodePointers, sizeof(EDGE_POINTER_TYPE) * vertexArrSize);
         gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(EdgeType)*edgeArrSize));
-        //gpuErrorcheck(cudaMallocManaged(&edgeArray,sizeof(EdgeType)*edgeArrSize));
-        //gpuErrorcheck(cudaMemAdvise(edgeArray,edgeArrSize*sizeof(EdgeType),cudaMemAdviseSetAccessedBy,0));
+        // Read edges: original format may store smaller types, read directly
+        // (original Liberator binary format stores edges at EDGE_POINTER_TYPE width)
         infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
     }
     else{
@@ -292,13 +307,54 @@ void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagera
     this->edgeArrSize = num_edges;
     cout << "vertex num: " << this->vertexArrSize << " edge num: " << this->edgeArrSize << endl;
 
-    // Read uint32 nodePointers and widen to EDGE_POINTER_TYPE
+    // Read uint32 nodePointers and widen to EDGE_POINTER_TYPE (64-bit)
     uint *nodePointersU32 = new uint[num_nodes];
     infile.read((char *) nodePointersU32, sizeof(uint) * num_nodes);
 
     nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
     for (uint i = 0; i < num_nodes; i++) {
         nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
+    }
+
+    // Verify 32-bit → 64-bit widening
+    {
+        bool ok = true;
+        // Check monotonicity
+        for (uint i = 1; i < num_nodes; i++) {
+            if (nodePointers[i] < nodePointers[i - 1]) {
+                cerr << "ERROR: nodePointers not monotonic at " << i
+                     << ": " << nodePointers[i-1] << " > " << nodePointers[i] << endl;
+                ok = false;
+                break;
+            }
+        }
+        // Check last vertex's edge range does not exceed edgeArrSize
+        EDGE_POINTER_TYPE lastEnd = nodePointers[num_nodes - 1]
+            + (edgeArrSize - nodePointers[num_nodes - 1]);
+        if (lastEnd != edgeArrSize) {
+            cerr << "ERROR: last vertex edge range mismatch: " << lastEnd
+                 << " != edgeArrSize " << edgeArrSize << endl;
+            ok = false;
+        }
+        // Check widening preserved values (spot-check first, mid, last)
+        uint checkIdx[] = {0, num_nodes / 2, num_nodes - 1};
+        for (uint idx : checkIdx) {
+            if (nodePointers[idx] != (EDGE_POINTER_TYPE) nodePointersU32[idx]) {
+                cerr << "ERROR: widening mismatch at " << idx
+                     << ": u32=" << nodePointersU32[idx]
+                     << " u64=" << nodePointers[idx] << endl;
+                ok = false;
+            }
+        }
+        if (ok) {
+            cout << "  ✓ 32→64 bit widening verified: "
+                 << "nodePointers[0]=" << nodePointers[0]
+                 << " nodePointers[" << num_nodes-1 << "]=" << nodePointers[num_nodes-1]
+                 << " edgeArrSize=" << edgeArrSize << endl;
+        } else {
+            cerr << "FATAL: 32→64 bit widening verification FAILED" << endl;
+            exit(1);
+        }
     }
     delete[] nodePointersU32;
 
@@ -310,22 +366,24 @@ void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagera
     }
 
     // Detect format mismatch between file and EdgeType, convert if needed
+    // NOTE: Binary files store 32-bit data. We always read into temp buffers
+    // and widen to 64-bit types since SIZE_TYPE is now uint64_t.
     bool fileIsWeighted = endsWith(fileName, ".bwcsr");
     const size_t CHUNK = 1 << 20; // 1M edges per chunk
 
     if (fileIsWeighted && !std::is_same<EdgeType, EdgeWithWeight>::value) {
-        // .bwcsr file but EdgeType has no weight (e.g., uint for BFS/CC/PR)
-        // Read EdgeWithWeight pairs, extract toNode only
-        cout << "Auto-converting: .bwcsr -> stripping weights" << endl;
-        EdgeWithWeight *buf = new EdgeWithWeight[CHUNK];
+        // .bwcsr file but EdgeType has no weight (e.g., uint64_t for BFS/CC/PR)
+        // Read 32-bit EdgeWithWeight pairs, extract toNode and widen
+        struct EdgeWithWeight32 { uint32_t toNode; uint32_t weight; };
+        cout << "Auto-converting: .bwcsr -> stripping weights (32->64 bit)" << endl;
+        EdgeWithWeight32 *buf = new EdgeWithWeight32[CHUNK];
         EDGE_POINTER_TYPE offset = 0;
         EDGE_POINTER_TYPE remaining = edgeArrSize;
         while (remaining > 0) {
             size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
-            infile.read((char *)buf, sizeof(EdgeWithWeight) * n);
+            infile.read((char *)buf, sizeof(EdgeWithWeight32) * n);
             for (size_t i = 0; i < n; i++) {
-                memset(&edgeArray[offset + i], 0, sizeof(EdgeType));
-                memcpy(&edgeArray[offset + i], &buf[i].toNode, sizeof(uint));
+                assignEdgeFromU64(edgeArray[offset + i], (uint64_t)buf[i].toNode);
             }
             offset += n;
             remaining -= n;
@@ -333,17 +391,17 @@ void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagera
         delete[] buf;
     } else if (!fileIsWeighted && std::is_same<EdgeType, EdgeWithWeight>::value) {
         // .bcsr file but EdgeType is EdgeWithWeight (SSSP)
-        // Read uint toNode, set default weight = 1
-        cout << "Auto-converting: .bcsr -> adding default weight=1" << endl;
-        uint *buf = new uint[CHUNK];
+        // Read uint32 toNode, widen to uint64_t, set default weight = 1
+        cout << "Auto-converting: .bcsr -> adding default weight=1 (32->64 bit)" << endl;
+        uint32_t *buf = new uint32_t[CHUNK];
         EDGE_POINTER_TYPE offset = 0;
         EDGE_POINTER_TYPE remaining = edgeArrSize;
         while (remaining > 0) {
             size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
-            infile.read((char *)buf, sizeof(uint) * n);
+            infile.read((char *)buf, sizeof(uint32_t) * n);
             for (size_t i = 0; i < n; i++) {
                 EdgeWithWeight ew;
-                ew.toNode = buf[i];
+                ew.toNode = (uint64_t)buf[i];
                 ew.weight = 1;
                 memcpy(&edgeArray[offset + i], &ew, sizeof(EdgeType));
             }
@@ -351,9 +409,44 @@ void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagera
             remaining -= n;
         }
         delete[] buf;
+    } else if (fileIsWeighted && std::is_same<EdgeType, EdgeWithWeight>::value) {
+        // .bwcsr file and EdgeType is EdgeWithWeight (SSSP)
+        // Read 32-bit pairs and widen to 64-bit EdgeWithWeight
+        struct EdgeWithWeight32 { uint32_t toNode; uint32_t weight; };
+        cout << "Reading .bwcsr with 32->64 bit widening" << endl;
+        EdgeWithWeight32 *buf = new EdgeWithWeight32[CHUNK];
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(EdgeWithWeight32) * n);
+            for (size_t i = 0; i < n; i++) {
+                EdgeWithWeight ew;
+                ew.toNode = (uint64_t)buf[i].toNode;
+                ew.weight = (uint64_t)buf[i].weight;
+                memcpy(&edgeArray[offset + i], &ew, sizeof(ew));
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
     } else {
-        // Format matches EdgeType, direct read
-        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
+        // .bcsr file with non-weighted EdgeType (uint64_t for BFS/CC/PR)
+        // Read 32-bit edges and widen to 64-bit
+        cout << "Reading .bcsr with 32->64 bit edge widening" << endl;
+        uint32_t *buf = new uint32_t[CHUNK];
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(uint32_t) * n);
+            for (size_t i = 0; i < n; i++) {
+                assignEdgeFromU64(edgeArray[offset + i], (uint64_t)buf[i]);
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
     }
 
     infile.close();
@@ -373,8 +466,143 @@ void GraphMeta<EdgeType>::readDataFromBCSR(const string &fileName, bool isPagera
 }
 
 template<class EdgeType>
+void GraphMeta<EdgeType>::readDataFromBCSR64(const string &fileName, bool isPagerank) {
+    cout << "readDataFromBCSR64 (64-bit binary CSR format)" << endl;
+    auto startTime = chrono::steady_clock::now();
+    ifstream infile(fileName, ios::in | ios::binary);
+    if (!infile.is_open()) {
+        cerr << "Error: cannot open file " << fileName << endl;
+        exit(1);
+    }
+
+    // bcsr64/bwcsr64: header is two uint64_t values
+    uint64_t num_nodes, num_edges;
+    infile.read((char *) &num_nodes, sizeof(uint64_t));
+    infile.read((char *) &num_edges, sizeof(uint64_t));
+    this->vertexArrSize = num_nodes;
+    this->edgeArrSize = num_edges;
+    cout << "vertex num: " << this->vertexArrSize << " edge num: " << this->edgeArrSize << endl;
+
+    // Read uint64_t offsets directly into nodePointers (already EDGE_POINTER_TYPE = uint64_t)
+    nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
+    infile.read((char *) nodePointers, sizeof(uint64_t) * vertexArrSize);
+    if (!infile) {
+        cerr << "Failed to read bcsr64 node pointers from " << fileName << endl;
+        exit(1);
+    }
+
+    // Allocate edge array
+    if (model == 7) {
+        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(EdgeType) * edgeArrSize));
+    } else {
+        edgeArray = new EdgeType[edgeArrSize];
+    }
+
+    bool fileIsWeighted = endsWith(fileName, ".bwcsr64");
+
+    if (fileIsWeighted && std::is_same<EdgeType, EdgeWithWeight>::value) {
+        // bwcsr64: interleaved {uint64_t end, uint64_t w8} per edge
+        // Read directly as EdgeWithWeight (toNode=uint64_t, weight=uint64_t)
+        cout << "Reading bwcsr64 format with EdgeWithWeight" << endl;
+        struct EdgeWeighted64 { uint64_t toNode; uint64_t weight; };
+        const size_t CHUNK = 1 << 20;
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        EdgeWeighted64 *buf = new EdgeWeighted64[CHUNK];
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(EdgeWeighted64) * n);
+            if (!infile) {
+                cerr << "Failed to read bwcsr64 weighted edges from " << fileName << endl;
+                exit(1);
+            }
+            for (size_t i = 0; i < n; i++) {
+                EdgeWithWeight ew;
+                ew.toNode = buf[i].toNode;
+                ew.weight = buf[i].weight;
+                memcpy(&edgeArray[offset + i], &ew, sizeof(EdgeType));
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
+    } else if (fileIsWeighted && !std::is_same<EdgeType, EdgeWithWeight>::value) {
+        // bwcsr64 file but EdgeType is plain (BFS/CC/PR) — strip weights
+        cout << "Reading bwcsr64 format, stripping weights" << endl;
+        struct EdgeWeighted64 { uint64_t toNode; uint64_t weight; };
+        const size_t CHUNK = 1 << 20;
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        EdgeWeighted64 *buf = new EdgeWeighted64[CHUNK];
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(EdgeWeighted64) * n);
+            if (!infile) {
+                cerr << "Failed to read bwcsr64 edges from " << fileName << endl;
+                exit(1);
+            }
+            for (size_t i = 0; i < n; i++) {
+                assignEdgeFromU64(edgeArray[offset + i], buf[i].toNode);
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
+    } else if (!fileIsWeighted && std::is_same<EdgeType, EdgeWithWeight>::value) {
+        // bcsr64 file but EdgeType is EdgeWithWeight — add default weight
+        cout << "Reading bcsr64 format, adding default weight=1" << endl;
+        const size_t CHUNK = 1 << 20;
+        uint64_t *buf = new uint64_t[CHUNK];
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(uint64_t) * n);
+            if (!infile) {
+                cerr << "Failed to read bcsr64 edges from " << fileName << endl;
+                exit(1);
+            }
+            for (size_t i = 0; i < n; i++) {
+                EdgeWithWeight ew;
+                ew.toNode = buf[i];
+                ew.weight = 1;
+                memcpy(&edgeArray[offset + i], &ew, sizeof(EdgeType));
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
+    } else {
+        // bcsr64 file with plain EdgeType — read uint64_t edges directly
+        cout << "Reading bcsr64 format (direct uint64_t edges)" << endl;
+        infile.read((char *) edgeArray, sizeof(uint64_t) * edgeArrSize);
+        if (!infile) {
+            cerr << "Failed to read bcsr64 edges from " << fileName << endl;
+            exit(1);
+        }
+    }
+
+    infile.close();
+
+    // For PageRank, compute outDegree from nodePointers
+    if (isPagerank) {
+        outDegree = new SIZE_TYPE[vertexArrSize];
+        for (SIZE_TYPE i = 0; i < vertexArrSize - 1; i++) {
+            outDegree[i] = (SIZE_TYPE)(nodePointers[i + 1] - nodePointers[i]);
+        }
+        outDegree[vertexArrSize - 1] = (SIZE_TYPE)(edgeArrSize - nodePointers[vertexArrSize - 1]);
+    }
+
+    auto endTime = chrono::steady_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime).count();
+    cout << "readDataFromBCSR64 " << duration << " ms" << endl;
+}
+
+template<class EdgeType>
 void GraphMeta<EdgeType>::readGraph(const string &fileName, bool isPagerank) {
-    if (endsWith(fileName, ".bcsr") || endsWith(fileName, ".bwcsr")) {
+    if (endsWith(fileName, ".bcsr64") || endsWith(fileName, ".bwcsr64")) {
+        readDataFromBCSR64(fileName, isPagerank);
+    } else if (endsWith(fileName, ".bcsr") || endsWith(fileName, ".bwcsr")) {
         readDataFromBCSR(fileName, isPagerank);
     } else {
         readDataFromFile(fileName, isPagerank);
@@ -384,33 +612,61 @@ void GraphMeta<EdgeType>::readGraph(const string &fileName, bool isPagerank) {
 template<class EdgeType>
 void GraphMeta<EdgeType>::transFileUintToUlong(const string &fileName) {
     ifstream infile(fileName, ios::in | ios::binary);
-    infile.read((char *) &this->vertexArrSize, sizeof(uint));
-    infile.read((char *) &this->edgeArrSize, sizeof(uint));
+    // Source file stores 32-bit header — read into temp vars and widen
+    uint num_nodes_u32, num_edges_u32;
+    infile.read((char *) &num_nodes_u32, sizeof(uint));
+    infile.read((char *) &num_edges_u32, sizeof(uint));
+    this->vertexArrSize = num_nodes_u32;
+    this->edgeArrSize = num_edges_u32;
     cout << "vertex num: " << this->vertexArrSize << " edge num: " << this->edgeArrSize << endl;
-    outDegree = new uint[vertexArrSize];
+    outDegree = new SIZE_TYPE[vertexArrSize];
     nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
-    infile.read((char *) nodePointers, sizeof(uint) * vertexArrSize);
+    // Source file stores 32-bit nodePointers — read into temp buffer and widen
+    uint *nodePointersU32 = new uint[vertexArrSize];
+    infile.read((char *) nodePointersU32, sizeof(uint) * vertexArrSize);
+    for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
+        nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
+    }
+    delete[] nodePointersU32;
+    // Source file stores 32-bit edges — read into temp buffer and widen
     if(model==7) {
         gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(EdgeType)*edgeArrSize));
-        //gpuErrorcheck(cudaMallocManaged(&edgeArray,sizeof(EdgeType)*edgeArrSize));
-        //gpuErrorcheck(cudaMemAdvise(edgeArray,edgeArrSize*sizeof(EdgeType),cudaMemAdviseSetAccessedBy,0));
-        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
-    }
-    else{
+    } else {
         edgeArray = new EdgeType[edgeArrSize];
-        infile.read((char *) edgeArray, sizeof(EdgeType) * edgeArrSize);
+    }
+    {
+        const size_t CHUNK = 1 << 20;
+        uint32_t *buf = new uint32_t[CHUNK];
+        EDGE_POINTER_TYPE offset = 0;
+        EDGE_POINTER_TYPE remaining = edgeArrSize;
+        while (remaining > 0) {
+            size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+            infile.read((char *)buf, sizeof(uint32_t) * n);
+            for (size_t i = 0; i < n; i++) {
+                assignEdgeFromU64(edgeArray[offset + i], (uint64_t)buf[i]);
+            }
+            offset += n;
+            remaining -= n;
+        }
+        delete[] buf;
     }
     infile.close();
     vector<ulong> transData(edgeArrSize);
-    for (int i = 0; i < edgeArrSize; i++) {
+    for (SIZE_TYPE i = 0; i < edgeArrSize; i++) {
         transData[i] = edgeArray[i];
     }
 
     std::ofstream outfile(fileName.substr(0, fileName.length() - 4) + "lcsr", std::ofstream::binary);
-
-    outfile.write((char *) &vertexArrSize, sizeof(unsigned int));
-    outfile.write((char *) &edgeArrSize, sizeof(unsigned int));
-    outfile.write((char *) nodePointers, sizeof(unsigned int) * vertexArrSize);
+    // Output format intentionally writes 32-bit header for compatibility
+    outfile.write((char *) &num_nodes_u32, sizeof(unsigned int));
+    outfile.write((char *) &num_edges_u32, sizeof(unsigned int));
+    // Write widened nodePointers as 32-bit (truncating back for legacy format)
+    uint *nodePointersOut = new uint[vertexArrSize];
+    for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
+        nodePointersOut[i] = (uint) nodePointers[i];
+    }
+    outfile.write((char *) nodePointersOut, sizeof(unsigned int) * vertexArrSize);
+    delete[] nodePointersOut;
     outfile.write((char *) transData.data(), sizeof(ulong) * edgeArrSize);
 
     outfile.close();
@@ -451,13 +707,13 @@ template<class EdgeType>
 bool GraphMeta<EdgeType>::checkgraph(){
     bool flag=true;
     cout<<"checkgraph()"<<endl;
-    for(uint i=0;i<vertexArrSize;i++){
+    for(SIZE_TYPE i=0;i<vertexArrSize;i++){
         if(nodePointers[i]>=edgeArrSize){
             cout<<"pointer error at "<<i<<" with "<<nodePointers[i]<<endl;
             flag=false;
         }
     }
-    for(uint i=0;i<edgeArrSize;i++){
+    for(EDGE_POINTER_TYPE i=0;i<edgeArrSize;i++){
         if(edgeArray[i]>=vertexArrSize){
             cout<<"edge error at "<<i<<" with "<<edgeArray[i]<<endl;
             flag=false;
@@ -515,7 +771,7 @@ void GraphMeta<EdgeType>::initGraphHost() {
     }
     
     staticNodePointer = new EDGE_POINTER_TYPE[max_static_node+1];
-    for (uint i = 0; i < max_static_node+1; i++) {
+    for (SIZE_TYPE i = 0; i < max_static_node+1; i++) {
         staticNodePointer[i] = nodePointers[i];
     }
 }
@@ -525,8 +781,8 @@ template<class EdgeType>
 void GraphMeta<EdgeType>::initGraphDevice() {
     cout << "initGraphDevice()" << endl;
     
-    GPU_MALLOC(&resultD, grid.x * sizeof(uint), "resultD");
-    GPU_MALLOC(&prefixSumTemp, vertexArrSize * sizeof(uint), "prefixSumTemp");
+    GPU_MALLOC(&resultD, grid.x * sizeof(SIZE_TYPE), "resultD");
+    GPU_MALLOC(&prefixSumTemp, vertexArrSize * sizeof(SIZE_TYPE), "prefixSumTemp");
     //uint* tempResult = new uint[grid.x];
     //memset(tempResult, 0, sizeof(int) * grid.x);
     //cudaMemcpy(resultD, tempResult, grid.x * sizeof(int), cudaMemcpyHostToDevice);
@@ -581,14 +837,14 @@ void GraphMeta<EdgeType>::initGraphDevice() {
         
             GPU_MALLOC(&outDegreeD, vertexArrSize * sizeof(SIZE_TYPE), "outDegreeD");
             cudaMemcpy(outDegreeD, outDegree, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
-            GPU_MALLOC(&valuePrD, vertexArrSize * sizeof(double), "valuePrD");
-            cudaMemcpy(valuePrD, valuePr, vertexArrSize * sizeof(double), cudaMemcpyHostToDevice);
-            GPU_MALLOC(&sumD, vertexArrSize * sizeof(double), "sumD");
-            cudaMemset(sumD, 0, vertexArrSize * sizeof(double));
-            //cudaMalloc(&Diff,vertexArrSize*sizeof(double));
-            //cudaMemset(Diff,0.0,vertexArrSize*sizeof(double));
-            sumDThrust = thrust::device_ptr<double>(sumD);
-            //DiffDThrust = thrust::device_ptr<double>(Diff);
+            GPU_MALLOC(&valuePrD, vertexArrSize * sizeof(float), "valuePrD");
+            cudaMemcpy(valuePrD, valuePr, vertexArrSize * sizeof(float), cudaMemcpyHostToDevice);
+            GPU_MALLOC(&sumD, vertexArrSize * sizeof(float), "sumD");
+            cudaMemset(sumD, 0, vertexArrSize * sizeof(float));
+            //cudaMalloc(&Diff,vertexArrSize*sizeof(float));
+            //cudaMemset(Diff,0.0,vertexArrSize*sizeof(float));
+            sumDThrust = thrust::device_ptr<float>(sumD);
+            //DiffDThrust = thrust::device_ptr<float>(Diff);
         
     } else {
         GPU_MALLOC(&valueD, vertexArrSize * sizeof(SIZE_TYPE), "valueD");
@@ -635,7 +891,7 @@ void GraphMeta<EdgeType>::getMaxPartitionSize() {
     size_t reduceMem;
     if(algType==PR){
         reduceMem = (size_t)(paramSize-2) * sizeof(SIZE_TYPE) * (size_t) vertexArrSize;
-        reduceMem += sizeof(double) * 2 * (size_t)vertexArrSize;
+        reduceMem += sizeof(float) * 2 * (size_t)vertexArrSize;
     }
     else
     reduceMem = (size_t)paramSize * sizeof(SIZE_TYPE) * (size_t) vertexArrSize + (size_t)vertexArrSize*sizeof(EDGE_POINTER_TYPE);
@@ -684,10 +940,7 @@ void GraphMeta<EdgeType>::getMaxPartitionSize() {
                 (reduceMem < availMemory) ? (availMemory - reduceMem) : 0,
                 max_partition_size,
                 total_gpu_size);
-            if (max_partition_size > UINT_MAX) {
-                printf("bigger than DIST_INFINITY\n");
-                max_partition_size = UINT_MAX;
-            }
+            // No UINT_MAX cap needed - SIZE_TYPE is now 64-bit
             unsigned long temp = max_partition_size % fragmentSize;
             max_partition_size = max_partition_size - temp;
             max_static_node = 0;
@@ -716,10 +969,10 @@ void GraphMeta<EdgeType>::initLableAndValue() {
 
     label = new bool[vertexArrSize];
     if (algType == PR) {
-        valuePr = new double[vertexArrSize];
+        valuePr = new float[vertexArrSize];
         for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
             label[i] = 1;
-            valuePr[i] = 1.0;
+            valuePr[i] = 0.15f;
         }
     } else {
         value = new SIZE_TYPE[vertexArrSize];
@@ -755,10 +1008,10 @@ void GraphMeta<EdgeType>::refreshLabelAndValue() {
     if (algType == PR) {
         for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
             label[i] = 1;
-            valuePr[i] = 1.0 / vertexArrSize;
+            valuePr[i] = 0.15f;
         }
         //cout << "refreshLabelAndValue() end1" << endl;
-        cudaMemcpy(valuePrD, valuePr, vertexArrSize * sizeof(double), cudaMemcpyHostToDevice);
+        cudaMemcpy(valuePrD, valuePr, vertexArrSize * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(isActiveD, label, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
         cudaMemcpy(isInStaticD, isInStatic, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
         
@@ -807,7 +1060,7 @@ void GraphMeta<EdgeType>::refreshLabelAndValue() {
 }
 
 template<class EdgeType>
-void GraphMeta<EdgeType>::fillEdgeArrByMultiThread(uint overloadNodeSize) {
+void GraphMeta<EdgeType>::fillEdgeArrByMultiThread(SIZE_TYPE overloadNodeSize) {
     //cout << "fillEdgeArrByMultiThread" << endl;
     int threadNum = 20;
     if (overloadNodeSize < 50) {
@@ -820,35 +1073,35 @@ void GraphMeta<EdgeType>::fillEdgeArrByMultiThread(uint overloadNodeSize) {
         runThreads[threadIndex] = thread([&, threadIndex] {
             float waitToHandleNum = overloadNodeSize;
             float numThreadsF = threadNum;
-            unsigned int chunkSize = ceil(waitToHandleNum / numThreadsF);
-            unsigned int left, right;
+            SIZE_TYPE chunkSize = ceil(waitToHandleNum / numThreadsF);
+            SIZE_TYPE left, right;
             //cout << "======= threadIndex " << threadIndex << endl;
             left = threadIndex * chunkSize;
             right = min(left + chunkSize, overloadNodeSize);
-            unsigned int thisNode;
-            unsigned int thisDegree;
+            SIZE_TYPE thisNode;
+            SIZE_TYPE thisDegree;
             EDGE_POINTER_TYPE fromHere = 0;
             EDGE_POINTER_TYPE fromThere = 0;
             //cout << left << "=======" << right << endl;
-            for (unsigned int i = left; i < right; i++) {
+            for (SIZE_TYPE i = left; i < right; i++) {
                 thisNode = overloadNodeList[i];
                 thisDegree = degree[thisNode];
                 fromHere = activeOverloadNodePointers[i];
                 fromThere = nodePointers[thisNode];
-                
+
                 // if(activeOverloadNodePointers[i] > overloadSize) {
                 //     cout << "activeOverloadNodePointers[" << i << "] is " << activeOverloadNodePointers[i] << endl;
                 //     break;
                 // }
-                for (unsigned int j = 0; j < thisDegree; j++) {
+                for (SIZE_TYPE j = 0; j < thisDegree; j++) {
                     overloadEdgeList[fromHere + j] = edgeArray[fromThere + j];
                     //cout << fromHere + j << " : " << overloadEdgeList[fromHere + j] << endl;
                 }
-                
+
             }
         });
     }
-    for (unsigned int t = 0; t < threadNum; t++) {
+    for (int t = 0; t < threadNum; t++) {
         runThreads[t].join();
     }
 }
@@ -857,8 +1110,8 @@ template<class EdgeType>
 void GraphMeta<EdgeType>::caculatePartInfoForEdgeList(SIZE_TYPE overloadNodeNum, EDGE_POINTER_TYPE overloadEdgeNum) {
     partEdgeListInfoArr.clear();
     if (partOverloadSize < overloadEdgeNum) {
-        uint left = 0;
-        uint right = overloadNodeNum - 1;
+        SIZE_TYPE left = 0;
+        SIZE_TYPE right = overloadNodeNum - 1;
         while ((activeOverloadNodePointers[right] + degree[overloadNodeList[right]] -
                 activeOverloadNodePointers[left]) >
                partOverloadSize) {
@@ -866,9 +1119,9 @@ void GraphMeta<EdgeType>::caculatePartInfoForEdgeList(SIZE_TYPE overloadNodeNum,
             //cout << "left " << left << " right " << right << endl;
             //cout << "activeOverloadNodePointers[right] + degree[overloadNodeList[right]] "<< activeOverloadNodePointers[right] + degree[overloadNodeList[right]] <<" activeOverloadNodePointers[left] " << activeOverloadNodePointers[left] << endl;
 
-            uint start = left;
-            uint end = right;
-            uint mid;
+            SIZE_TYPE start = left;
+            SIZE_TYPE end = right;
+            SIZE_TYPE mid;
             while (start <= end) {
                 mid = (start + end) / 2;
                 EDGE_POINTER_TYPE headDistance = activeOverloadNodePointers[mid] - activeOverloadNodePointers[left];
@@ -922,12 +1175,12 @@ void GraphMeta<EdgeType>::writevalue(string filename){
     unsigned int num = 0;
     switch (algType){
         case PR:
-        cudaMemcpy(valuePr,valuePrD,vertexArrSize*sizeof(double),cudaMemcpyDeviceToHost);
+        cudaMemcpy(valuePr,valuePrD,vertexArrSize*sizeof(float),cudaMemcpyDeviceToHost);
         cudaDeviceSynchronize();
         gpuErrorcheck(cudaPeekAtLastError());
         
         for(unsigned long long i=0;i<vertexArrSize;i++){
-            if(valuePr[i]==0.15)
+            if(valuePr[i]==0.15f)
             num++;
             outfile << valuePr[i] <<std::endl;
         }

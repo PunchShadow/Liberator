@@ -6,16 +6,16 @@
 #include "cpu_verify.cuh"
 
 template<class T>
-__global__ void testRefresh(bool *isActive, T *data, uint size) {
-    streamVertices(size, [&](uint id) {
+__global__ void testRefresh(bool *isActive, T *data, SIZE_TYPE size) {
+    streamVertices(size, [&](SIZE_TYPE id) {
         data[id] = isActive[id];
     });
 }
 
-void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify) {
+void bfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify) {
     cout << "======bfs_opt=======" << endl;
     cout<<"sourceNode: "<<sourceNode<<endl;
-    GraphMeta<uint> graph;
+    GraphMeta<SIZE_TYPE> graph;
     graph.setAlgType(BFS);
     graph.setmodel(model);
     graph.setGpuMemoryLimit(gpuMemoryLimit);
@@ -31,7 +31,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
     graph.checkNode(sourceNode);
     //getchar();
     // by testing, reduceBool not better than thrust
-    //uint activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
+    //SIZE_TYPE activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
 
     cout << "2test!!!!!!!!!" <<endl;
     TimeRecord<chrono::milliseconds> forULLProcess("forULLProcess");
@@ -47,8 +47,8 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
     
     totalProcess.startRecord();
     cout << "graph.vertexArrSize " << graph.vertexArrSize << endl;
-    uint activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                    thrust::plus<uint>());
+    SIZE_TYPE activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
+                                    thrust::plus<SIZE_TYPE>());
     //SIZE_TYPE staticmem = graph.ret_max_partition_size();
 
     cout << "3test!!!!!!!!!" <<endl;
@@ -60,7 +60,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
     EDGE_POINTER_TYPE overloadEdges = 0; 
 
     cout<<"Start test bfs, total test time: "<<testTimes<<endl;
-    uint src=graph.sourceNode;
+    SIZE_TYPE src=graph.sourceNode;
     long totalduration = 0;
     long overloaduration = 0;
     long staticduration = 0;
@@ -74,8 +74,8 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
         graph.refreshLabelAndValue();
         cudaDeviceSynchronize();
         activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                        thrust::plus<uint>());
-        uint nodeSum = activeNodesNum;
+                                        thrust::plus<SIZE_TYPE>());
+        SIZE_TYPE nodeSum = activeNodesNum;
 
         int iter = 0;
         totalProcess.startRecord();
@@ -90,15 +90,15 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
                                                                        //cout<<"setStaticAndOverloadLabelBool done!!!!!"<<endl;
             //test static area
             
-            uint staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
+            SIZE_TYPE staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
                                                 graph.actStaticLablingThrust + graph.vertexArrSize, 0,
-                                                thrust::plus<uint>());
+                                                thrust::plus<SIZE_TYPE>());
                                                 
             if (staticNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                     
                 thrust::exclusive_scan(graph.actStaticLablingThrust, graph.actStaticLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setStaticActiveNodeArray<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.staticNodeListD,
                                                                       graph.isStaticActive,
                                                                       graph.prefixSumTemp);
@@ -106,15 +106,15 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
             //cout<<"staticNodeNum is "<<staticNodeNum;
             
             
-            uint overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
+            SIZE_TYPE overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
                                                   graph.actOverLablingThrust + graph.vertexArrSize, 0,
-                                                  thrust::plus<uint>());
+                                                  thrust::plus<SIZE_TYPE>());
 
             //cout<<" overloadNodeNum is "<<overloadNodeNum<<endl;
             // if(iter==1){
-            //     uint* temp_static = new uint[staticNodeNum];
-            //     cudaMemcpy(temp_static,graph.staticNodeListD,staticNodeNum*sizeof(uint),cudaMemcpyDeviceToHost);
-            //     for(uint i=0;i<staticNodeNum;i++){
+            //     SIZE_TYPE* temp_static = new SIZE_TYPE[staticNodeNum];
+            //     cudaMemcpy(temp_static,graph.staticNodeListD,staticNodeNum*sizeof(SIZE_TYPE),cudaMemcpyDeviceToHost);
+            //     for(SIZE_TYPE i=0;i<staticNodeNum;i++){
             //         cout<<temp_static[i]<<" ";
             //     }
             //     cout<<endl;  
@@ -122,16 +122,16 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
                                                 
             EDGE_POINTER_TYPE overloadEdgeNum = 0;
             if (overloadNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                 thrust::exclusive_scan(graph.actOverLablingThrust, graph.actOverLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setOverloadNodePointerSwap<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.overloadNodeListD,
                                                                         graph.activeOverloadDegreeD,
                                                                         graph.isOverloadActive,
                                                                         graph.prefixSumTemp, graph.degreeD);
                 if(typeid(EDGE_POINTER_TYPE) == typeid(unsigned long long)) {
                     forULLProcess.startRecord();
-                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                     cudaMemcpyDeviceToHost, graph.streamDynamic);
                     EDGE_POINTER_TYPE * overloadDegree = new EDGE_POINTER_TYPE[overloadNodeNum];
                     cudaMemcpyAsync(overloadDegree, graph.activeOverloadDegreeD, overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -153,7 +153,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
                 } else {
                     thrust::device_ptr<EDGE_POINTER_TYPE> tempTestNodePointersThrust = thrust::device_ptr<EDGE_POINTER_TYPE>(graph.activeOverloadNodePointersD);
                     thrust::exclusive_scan(graph.actOverDegreeThrust, graph.actOverDegreeThrust + graph.vertexArrSize,
-                                           tempTestNodePointersThrust, 0, thrust::plus<uint>());
+                                           tempTestNodePointersThrust, 0, thrust::plus<SIZE_TYPE>());
                     overloadEdgeNum = thrust::reduce(thrust::device, graph.activeOverloadDegreeD,
                                                      graph.activeOverloadDegreeD + overloadNodeNum, 0);
                 }
@@ -162,7 +162,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
                // cout << "iter " << iter << " overloadNodeNum is " << overloadNodeNum << endl;
                 //cout << "iter " << iter << " overloadEdgeNum is " << overloadEdgeNum << endl;
             }
-            // double temp = (double)overloadEdgeNum*sizeof(uint)/1024/1024;
+            // double temp = (double)overloadEdgeNum*sizeof(SIZE_TYPE)/1024/1024;
             // cout<<temp<<endl;
             if (staticNodeNum > 0) {
                 setLabelDefaultOpt<<<graph.grid, graph.block, 0, graph.steamStatic>>>(staticNodeNum,
@@ -189,7 +189,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
             
             if (overloadNodeNum > 0) {
                 //MemcpyAsyn.startRecord();
-                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost, graph.streamDynamic);
                 cudaMemcpyAsync(graph.activeOverloadNodePointers, graph.activeOverloadNodePointersD,
                                 overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -211,7 +211,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
                         overloadMoveProcess.startRecord();
                         gpuErrorcheck(cudaMemcpy(graph.overloadEdgeListD, graph.overloadEdgeList +
                                                                       graph.activeOverloadNodePointers[graph.partEdgeListInfoArr[i].partStartIndex],
-                                             graph.partEdgeListInfoArr[i].partEdgeNums * sizeof(uint),
+                                             graph.partEdgeListInfoArr[i].partEdgeNums * sizeof(SIZE_TYPE),
                                              cudaMemcpyHostToDevice));
                         overloadMoveProcess.endRecord();
                         bfs_kernelDynamicPart<<<graph.grid, graph.block, 0, graph.streamDynamic>>>(
@@ -242,7 +242,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
                     uint64_t numthreads = 1024;
                     uint64_t numblocks = ((overloadNodeNum * WARP_SIZE + numthreads) / numthreads);
                     dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
-                    uint numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
+                    SIZE_TYPE numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
                     //cout<<"numwarps of iter"<<iter<<" is "<<numwarps<<endl;
                     bfs_kernelDynamicPart_test2<<<blockDim, numthreads , 0, graph.streamDynamic>>>(
                                 overloadNodeNum,numwarps,
@@ -255,7 +255,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
                      uint64_t numthreads = 1024;
                     uint64_t numblocks = ((overloadNodeNum * WARP_SIZE + numthreads) / numthreads);
                     dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
-                    uint numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
+                    SIZE_TYPE numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
                     //cout<<"numwarps of iter"<<iter<<" is "<<numwarps<<endl;
                     bfs_kernelDynamicPart_test<<<blockDim, numthreads , 0, graph.streamDynamic>>>(
                                 overloadNodeNum,numwarps,
@@ -275,7 +275,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
             preProcess.startRecord();
             activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize,
                                             0,
-                                            thrust::plus<uint>());
+                                            thrust::plus<SIZE_TYPE>());
             nodeSum += activeNodesNum;
             preProcess.endRecord();
             
@@ -292,7 +292,7 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
         forULLProcess.print();
         overloadMoveProcess.print();
         cout << "nodeSum : " << nodeSum << endl;
-        double temp = (double)overloadEdges * sizeof(uint)/1024/1024/1024;
+        double temp = (double)overloadEdges * sizeof(SIZE_TYPE)/1024/1024/1024;
         cout << "move overload size : " << temp<<" GB" << endl;
         overloadSize += temp;
         src+=graph.vertexArrSize/testTimes;
@@ -317,13 +317,13 @@ void bfs_opt(string path, uint sourceNode, double adviseRate,int model, int test
     if (verify) {
         cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
         cudaDeviceSynchronize();
-        cpu_verify_bfs(graph.nodePointers, (uint *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, sourceNode, graph.value);
+        cpu_verify_bfs(graph.nodePointers, (SIZE_TYPE *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, sourceNode, graph.value);
     }
 }
 
 void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuMemoryLimit, bool verify) {
     cout << "==========cc_opt==========" << endl;
-    GraphMeta<uint> graph;
+    GraphMeta<SIZE_TYPE> graph;
     graph.setAlgType(CC);
     graph.setmodel(model);
     graph.setGpuMemoryLimit(gpuMemoryLimit);
@@ -335,7 +335,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
 
 
     // by testing, reduceBool not better than thrust
-    //uint activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
+    //SIZE_TYPE activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
     TimeRecord<chrono::milliseconds> totalProcess("totalProcess");
     TimeRecord<chrono::milliseconds> forULLProcess("forULLProcess");
     TimeRecord<chrono::milliseconds> fillProcess("fillProcess");
@@ -345,8 +345,8 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
     TimeRecord<chrono::milliseconds> overloadMoveProcess("overloadMoveProcess");
 
     totalProcess.startRecord();
-    uint activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                    thrust::plus<uint>());
+    SIZE_TYPE activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
+                                    thrust::plus<SIZE_TYPE>());
     totalProcess.endRecord();
     cout << "activeNodesNum " << activeNodesNum << endl;
     totalProcess.print();
@@ -363,8 +363,8 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
         graph.refreshLabelAndValue();
         cudaDeviceSynchronize();
         activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                        thrust::plus<uint>());
-        uint nodeSum = activeNodesNum;
+                                        thrust::plus<SIZE_TYPE>());
+        SIZE_TYPE nodeSum = activeNodesNum;
         int iter = 0;
 
         totalProcess.startRecord();
@@ -374,28 +374,28 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
                                                                        graph.isStaticActive, graph.isOverloadActive,
                                                                        graph.isInStaticD);
-            uint staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
+            SIZE_TYPE staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
                                                 graph.actStaticLablingThrust + graph.vertexArrSize, 0,
-                                                thrust::plus<uint>());
+                                                thrust::plus<SIZE_TYPE>());
             if (staticNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                 thrust::exclusive_scan(graph.actStaticLablingThrust, graph.actStaticLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setStaticActiveNodeArray<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.staticNodeListD,
                                                                       graph.isStaticActive,
                                                                       graph.prefixSumTemp);
                 //cout << "iter " << iter << " staticNodeNum is " << staticNodeNum << endl;
             }
             //cout << "staticNodeNum is " << staticNodeNum <<" ";
-            uint overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
+            SIZE_TYPE overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
                                                   graph.actOverLablingThrust + graph.vertexArrSize, 0,
-                                                  thrust::plus<uint>());
+                                                  thrust::plus<SIZE_TYPE>());
             //cout<<"overlaodNodeNum is "<<overloadNodeNum<<endl;
             EDGE_POINTER_TYPE overloadEdgeNum = 0;
             if (overloadNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                 thrust::exclusive_scan(graph.actOverLablingThrust, graph.actOverLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setOverloadNodePointerSwap<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.overloadNodeListD,
                                                                         graph.activeOverloadDegreeD,
                                                                         graph.isOverloadActive,
@@ -403,7 +403,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
                 
                 if(typeid(EDGE_POINTER_TYPE) == typeid(unsigned long long)) {
                     forULLProcess.startRecord();
-                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                     cudaMemcpyDeviceToHost, graph.streamDynamic);
                     EDGE_POINTER_TYPE * overloadDegree = new EDGE_POINTER_TYPE[overloadNodeNum];
                     cudaMemcpyAsync(overloadDegree, graph.activeOverloadDegreeD, overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -425,7 +425,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
                 } else {
                     thrust::device_ptr<EDGE_POINTER_TYPE> tempTestNodePointersThrust = thrust::device_ptr<EDGE_POINTER_TYPE>(graph.activeOverloadNodePointersD);
                     thrust::exclusive_scan(graph.actOverDegreeThrust, graph.actOverDegreeThrust + graph.vertexArrSize,
-                                           tempTestNodePointersThrust, 0, thrust::plus<uint>());
+                                           tempTestNodePointersThrust, 0, thrust::plus<SIZE_TYPE>());
                     overloadEdgeNum = thrust::reduce(thrust::device, graph.activeOverloadDegreeD,
                                                      graph.activeOverloadDegreeD + overloadNodeNum, 0);
                 }
@@ -455,7 +455,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
             //cudaDeviceSynchronize();
 
             if (overloadNodeNum > 0) {
-                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost, graph.streamDynamic);
                 cudaMemcpyAsync(graph.activeOverloadNodePointers, graph.activeOverloadNodePointersD,
                                 overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -473,7 +473,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
                         overloadMoveProcess.startRecord();
                         gpuErrorcheck(cudaMemcpy(graph.overloadEdgeListD, graph.overloadEdgeList +
                                                                         graph.activeOverloadNodePointers[graph.partEdgeListInfoArr[i].partStartIndex],
-                                                graph.partEdgeListInfoArr[i].partEdgeNums * sizeof(uint),
+                                                graph.partEdgeListInfoArr[i].partEdgeNums * sizeof(SIZE_TYPE),
                                                 cudaMemcpyHostToDevice))
                         overloadMoveProcess.endRecord();
                         cc_kernelDynamicSwap<<<graph.grid, graph.block, 0, graph.streamDynamic>>>(
@@ -502,7 +502,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
                     uint64_t numthreads = 1024;
                     uint64_t numblocks = ((overloadNodeNum * WARP_SIZE + numthreads) / numthreads);
                     dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
-                    uint numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
+                    SIZE_TYPE numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
                     cc_kernelDynamicSwap_test<<<blockDim,numthreads,0,graph.streamDynamic>>>(
                         overloadNodeNum,graph.overloadNodeListD, graph.degreeD,
                         graph.valueD,numwarps,
@@ -522,10 +522,10 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
             //overloadProcess.endRecord();
             activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize,
                                             0,
-                                            thrust::plus<uint>());
+                                            thrust::plus<SIZE_TYPE>());
             nodeSum += activeNodesNum;
             //cout << "iter " << iter << " activeNodesNum " << activeNodesNum << endl;
-            double temp = (double)overloadEdgeNum*sizeof(uint)/1024/1024;
+            double temp = (double)overloadEdgeNum*sizeof(SIZE_TYPE)/1024/1024;
             cout<< temp <<endl;
         }
         totalProcess.endRecord();
@@ -537,7 +537,7 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
         //overloadProcess.print();
         overloadMoveProcess.print();
         cout << "nodeSum : " << nodeSum << endl;
-        double temp = (double)overloadEdges*sizeof(uint)/1024/1024/1024;
+        double temp = (double)overloadEdges*sizeof(SIZE_TYPE)/1024/1024/1024;
         cout << "move overload size : " << temp << "GB" << endl;
         totalduration+=totalProcess.getDuration();
         staticduration+=fillProcess.getDuration();
@@ -559,11 +559,11 @@ void cc_opt(string path, double adviseRate,int model,int _testTimes, double gpuM
     if (verify) {
         cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
         cudaDeviceSynchronize();
-        cpu_verify_cc(graph.nodePointers, (uint *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, graph.value);
+        cpu_verify_cc(graph.nodePointers, (SIZE_TYPE *)graph.edgeArray, graph.vertexArrSize, graph.edgeArrSize, graph.value);
     }
 }
 
-void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify) {
+void sssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify) {
     cout << "========sssp_opt==========" << endl;
     GraphMeta<EdgeWithWeight> graph;
     graph.setAlgType(SSSP);
@@ -579,22 +579,22 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
     graph.checkNodeforSSSP(sourceNode);
     
     // by testing, reduceBool not better than thrust
-    //uint activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
+    //SIZE_TYPE activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
     TimeRecord<chrono::milliseconds> totalProcess("totalProcess");
     TimeRecord<chrono::milliseconds> forULLProcess("forULLProcess");
     TimeRecord<chrono::milliseconds> overloadMoveProcess("overloadMoveProcess");
     TimeRecord<chrono::milliseconds> staticProcess("staticProcess");
     TimeRecord<chrono::milliseconds> overloadProcess("overloadProcess");
     totalProcess.startRecord();
-    uint activeNodesNum;
+    SIZE_TYPE activeNodesNum;
     activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                    thrust::plus<uint>());
+                                    thrust::plus<SIZE_TYPE>());
     totalProcess.endRecord();
     cout << "activeNodesNum " << activeNodesNum << endl;
     totalProcess.print();
     totalProcess.clearRecord();
     EDGE_POINTER_TYPE overloadEdges = 0;
-    uint src = graph.sourceNode;
+    SIZE_TYPE src = graph.sourceNode;
     long totalduration = 0;
     long staticduration = 0;
     long overloaduration = 0;
@@ -605,8 +605,8 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
         graph.refreshLabelAndValue();
         cudaDeviceSynchronize();
         activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                        thrust::plus<uint>());
-        uint nodeSum = activeNodesNum;
+                                        thrust::plus<SIZE_TYPE>());
+        SIZE_TYPE nodeSum = activeNodesNum;
         int iter = 0;
         totalProcess.startRecord();
         
@@ -616,34 +616,34 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
                                                                        graph.isStaticActive, graph.isOverloadActive,
                                                                        graph.isInStaticD);
-            uint staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
+            SIZE_TYPE staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
                                                 graph.actStaticLablingThrust + graph.vertexArrSize, 0,
-                                                thrust::plus<uint>());
+                                                thrust::plus<SIZE_TYPE>());
             if (staticNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                 thrust::exclusive_scan(graph.actStaticLablingThrust, graph.actStaticLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setStaticActiveNodeArray<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.staticNodeListD,
                                                                       graph.isStaticActive,
                                                                       graph.prefixSumTemp);
                 //cout << "iter " << iter << " staticNodeNum is " << staticNodeNum;
             }
             //cout << "iter " << iter << " staticNodeNum is " << staticNodeNum;
-            uint overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
+            SIZE_TYPE overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
                                                   graph.actOverLablingThrust + graph.vertexArrSize, 0,
-                                                  thrust::plus<uint>());
+                                                  thrust::plus<SIZE_TYPE>());
             EDGE_POINTER_TYPE overloadEdgeNum = 0;
             if (overloadNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                 thrust::exclusive_scan(graph.actOverLablingThrust, graph.actOverLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setOverloadNodePointerSwap<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.overloadNodeListD,
                                                                         graph.activeOverloadDegreeD,
                                                                         graph.isOverloadActive,
                                                                         graph.prefixSumTemp, graph.degreeD);
                 if(typeid(EDGE_POINTER_TYPE) == typeid(unsigned long long)) {
                     forULLProcess.startRecord();
-                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                     cudaMemcpyDeviceToHost, graph.streamDynamic);
                     EDGE_POINTER_TYPE * overloadDegree = new EDGE_POINTER_TYPE[overloadNodeNum];
                     cudaMemcpyAsync(overloadDegree, graph.activeOverloadDegreeD, overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -666,7 +666,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
                     thrust::device_ptr<EDGE_POINTER_TYPE> tempTestNodePointersThrust = thrust::device_ptr<EDGE_POINTER_TYPE>(graph.activeOverloadNodePointersD);
 
                     thrust::exclusive_scan(graph.actOverDegreeThrust, graph.actOverDegreeThrust + graph.vertexArrSize,
-                                           tempTestNodePointersThrust, 0, thrust::plus<uint>());
+                                           tempTestNodePointersThrust, 0, thrust::plus<SIZE_TYPE>());
                     overloadEdgeNum = thrust::reduce(thrust::device, graph.activeOverloadDegreeD,
                                                      graph.activeOverloadDegreeD + overloadNodeNum, 0);
                 }
@@ -674,7 +674,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
                 //cout << "iter " << iter << " overloadNodeNum is " << overloadNodeNum << endl;
                 //cout << "iter " << iter << " overloadEdgeNum is " << overloadEdgeNum << endl;
             }
-            //double temp = (double)overloadEdgeNum*sizeof(uint)/1024/1024;
+            //double temp = (double)overloadEdgeNum*sizeof(SIZE_TYPE)/1024/1024;
             //cout<<temp<<endl;
             if (staticNodeNum > 0) {
                 setLabelDefaultOpt<<<graph.grid, graph.block, 0, graph.steamStatic>>>(staticNodeNum,
@@ -695,7 +695,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
             //cudaDeviceSynchronize();
             //printf(" overloadnum %ld\n", overloadNodeNum);
             if (overloadNodeNum > 0) {
-                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost, graph.streamDynamic);
                 cudaMemcpyAsync(graph.activeOverloadNodePointers, graph.activeOverloadNodePointersD,
                                 overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -744,7 +744,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
                     uint64_t numthreads = 1024;
                     uint64_t numblocks = ((overloadNodeNum * WARP_SIZE + numthreads) / numthreads);
                     dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
-                    uint numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
+                    SIZE_TYPE numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
                     printf("iter %d numblocks %ld numwarps %ld overloadnum %ld\n",iter,numblocks, numwarps, overloadNodeNum);
                     sssp_kernelDynamic_test<<<blockDim, numthreads, 0, graph.streamDynamic>>>(
                         overloadNodeNum, graph.overloadNodeListD, graph.degreeD, numwarps,
@@ -764,7 +764,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
             
             activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize,
                                             0,
-                                            thrust::plus<uint>());
+                                            thrust::plus<SIZE_TYPE>());
             
             //activeNodesNum = thrust::count(graph.activeLablingThrust,graph.activeLablingThrust+graph.vertexArrSize,1);
             // if(n!=activeNodesNum){
@@ -814,7 +814,7 @@ void sssp_opt(string path, uint sourceNode, double adviseRate,int model,int test
 
 void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify) {
     cout << "=======pr_opt=======" << endl;
-    GraphMeta<uint> graph;
+    GraphMeta<SIZE_TYPE> graph;
     graph.setAlgType(PR);
     graph.setmodel(model);
     graph.setGpuMemoryLimit(gpuMemoryLimit);
@@ -826,7 +826,7 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
     graph.checkNodeforPR(1024);
 
     // by testing, reduceBool not better than thrust
-    //uint activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
+    //SIZE_TYPE activeNodesNum = reduceBool(graph.resultD, graph.isActiveD, graph.vertexArrSize, graph.grid, graph.block);
     TimeRecord<chrono::milliseconds> preProcess("preProcess");
     TimeRecord<chrono::milliseconds> staticProcess("staticProcess");
     TimeRecord<chrono::milliseconds> overloadProcess("overloadProcess");
@@ -840,8 +840,8 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
 
     graph.refreshLabelAndValue();
     
-    uint activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                    thrust::plus<uint>());
+    SIZE_TYPE activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
+                                    thrust::plus<SIZE_TYPE>());
     totalProcess.endRecord();
     cout << "activeNodesNum " << activeNodesNum << endl;
     totalProcess.print();
@@ -855,9 +855,9 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
         overloadEdges = 0;
         graph.refreshLabelAndValue();
         activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
-                                thrust::plus<uint>());
+                                thrust::plus<SIZE_TYPE>());
         gpuErrorcheck(cudaPeekAtLastError());
-        uint nodeSum = activeNodesNum;
+        SIZE_TYPE nodeSum = activeNodesNum;
         int iter = 0;
         double totalSum = thrust::reduce(thrust::device, graph.valuePrD, graph.valuePrD + graph.vertexArrSize) / graph.vertexArrSize;
         cout << "totalSum " << totalSum << endl;
@@ -874,36 +874,36 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
                                                                        graph.isStaticActive, graph.isOverloadActive,
                                                                        graph.isInStaticD);
-            uint staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
+            SIZE_TYPE staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
                                                 graph.actStaticLablingThrust + graph.vertexArrSize, 0,
-                                                thrust::plus<uint>());
+                                                thrust::plus<SIZE_TYPE>());
             //cout << "iter " << iter << " staticNodeNum is " << staticNodeNum;
             if (staticNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                 thrust::exclusive_scan(graph.actStaticLablingThrust, graph.actStaticLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setStaticActiveNodeArray<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.staticNodeListD,
                                                                       graph.isStaticActive,
                                                                       graph.prefixSumTemp);
                 //cout << "iter " << iter << " staticNodeNum is " << staticNodeNum << " ";
             }
 
-            uint overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
+            SIZE_TYPE overloadNodeNum = thrust::reduce(graph.actOverLablingThrust,
                                                   graph.actOverLablingThrust + graph.vertexArrSize, 0,
-                                                  thrust::plus<uint>());
+                                                  thrust::plus<SIZE_TYPE>());
             EDGE_POINTER_TYPE overloadEdgeNum = 0;
             //cout<<" overloadNodeNum is "<<overloadNodeNum<<endl;
             if (overloadNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(graph.prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
                 thrust::exclusive_scan(graph.actOverLablingThrust, graph.actOverLablingThrust + graph.vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setOverloadNodePointerSwap<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.overloadNodeListD,
                                                                         graph.activeOverloadDegreeD,
                                                                         graph.isOverloadActive,
                                                                         graph.prefixSumTemp, graph.degreeD);
                 if(typeid(EDGE_POINTER_TYPE) == typeid(unsigned long long)) {
                     forULLProcess.startRecord();
-                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                    cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                     cudaMemcpyDeviceToHost, graph.streamDynamic);
                     EDGE_POINTER_TYPE * overloadDegree = new EDGE_POINTER_TYPE[overloadNodeNum];
                     cudaMemcpyAsync(overloadDegree, graph.activeOverloadDegreeD, overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -926,7 +926,7 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
                     thrust::device_ptr<EDGE_POINTER_TYPE> tempTestNodePointersThrust = thrust::device_ptr<EDGE_POINTER_TYPE>(graph.activeOverloadNodePointersD);
                     
                     thrust::exclusive_scan(graph.actOverDegreeThrust, graph.actOverDegreeThrust + graph.vertexArrSize,
-                                           tempTestNodePointersThrust, 0, thrust::plus<uint>());
+                                           tempTestNodePointersThrust, 0, thrust::plus<SIZE_TYPE>());
                     overloadEdgeNum = thrust::reduce(thrust::device, graph.activeOverloadDegreeD,
                                                      graph.activeOverloadDegreeD + overloadNodeNum, 0);
                 }
@@ -945,7 +945,7 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
             //cudaDeviceSynchronize();
 
             if (overloadNodeNum > 0) {
-                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(graph.overloadNodeList, graph.overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost, graph.streamDynamic);
                 cudaMemcpyAsync(graph.activeOverloadNodePointers, graph.activeOverloadNodePointersD,
                                 overloadNodeNum * sizeof(EDGE_POINTER_TYPE),
@@ -960,7 +960,7 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
                         overloadMoveProcess.startRecord();
                         gpuErrorcheck(cudaMemcpy(graph.overloadEdgeListD, graph.overloadEdgeList +
                                                                       graph.activeOverloadNodePointers[graph.partEdgeListInfoArr[i].partStartIndex],
-                                             graph.partEdgeListInfoArr[i].partEdgeNums * sizeof(uint),
+                                             graph.partEdgeListInfoArr[i].partEdgeNums * sizeof(SIZE_TYPE),
                                              cudaMemcpyHostToDevice))
                         overloadMoveProcess.endRecord();
                         prSumKernel_dynamic<<<graph.grid, graph.block, 0, graph.streamDynamic>>>(
@@ -984,17 +984,17 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
             cudaDeviceSynchronize();
             activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize,
                                             0,
-                                            thrust::plus<uint>());
+                                            thrust::plus<SIZE_TYPE>());
             nodeSum += activeNodesNum;
             preProcess.endRecord();
             //cout << "iter " << iter+1 << " activeNodesNum " << activeNodesNum << endl;
-            // uint *overloadnodes = new uint[graph.vertexArrSize];
-            // cudaMemcpy(overloadnodes,graph.overloadNodeListD,sizeof(uint)*overloadNodeNum,cudaMemcpyDeviceToHost);
+            // SIZE_TYPE *overloadnodes = new SIZE_TYPE[graph.vertexArrSize];
+            // cudaMemcpy(overloadnodes,graph.overloadNodeListD,sizeof(SIZE_TYPE)*overloadNodeNum,cudaMemcpyDeviceToHost);
             // cudaDeviceSynchronize();
-            // for(uint i=0;i<overloadNodeNum;i++){
+            // for(SIZE_TYPE i=0;i<overloadNodeNum;i++){
             //     overloadedges += graph.degree[overloadnodes[i]];
             // }
-            // double temp = (double)overloadedges*sizeof(uint)/1024/1024/1024;
+            // double temp = (double)overloadedges*sizeof(SIZE_TYPE)/1024/1024/1024;
             // cout<<"transfer "<<temp<<" GB"<<endl;
         }
         cout<<"total iter: "<<iter<<endl;
@@ -1009,7 +1009,7 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
         forULLProcess.print();
         overloadMoveProcess.print();
         cout << "nodeSum : " << nodeSum << endl;
-        // double temp = (double)overloadEdges * sizeof(uint)/1024/1024/1024;
+        // double temp = (double)overloadEdges * sizeof(SIZE_TYPE)/1024/1024/1024;
         // cout << "move overload size : " << temp <<" GB" << endl;
         // overloadSize+=temp;
     }
@@ -1020,15 +1020,15 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
     cout<<"average overload process time: "<<Overload/testTimes<<"ms"<<endl;
     //cout<<"Avsrage transfer data "<<overloadSize/testTimes<<endl;
     gpuErrorcheck(cudaPeekAtLastError());
-    cudaMemcpy(graph.valuePr,graph.valuePrD,graph.vertexArrSize*sizeof(double),cudaMemcpyDeviceToHost);
-    uint num = 0;
-    for(uint i=0;i<graph.vertexArrSize;i++){
-        if(graph.valuePr[i]==0.15)
+    cudaMemcpy(graph.valuePr,graph.valuePrD,graph.vertexArrSize*sizeof(float),cudaMemcpyDeviceToHost);
+    SIZE_TYPE num = 0;
+    for(SIZE_TYPE i=0;i<graph.vertexArrSize;i++){
+        if(graph.valuePr[i]==0.15f)
         num++;
     }
     cout<<"0.15num: "<<num<<endl;
     //graph.writevalue("Ascetic_PR_GSH_res.txt");
     if (verify) {
-        cpu_verify_pr(graph.nodePointers, (uint *)graph.edgeArray, graph.outDegree, graph.vertexArrSize, graph.edgeArrSize, graph.valuePr);
+        cpu_verify_pr(graph.nodePointers, (SIZE_TYPE *)graph.edgeArray, graph.outDegree, graph.vertexArrSize, graph.edgeArrSize, graph.valuePr);
     }
 }

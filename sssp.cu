@@ -3,42 +3,42 @@
 //
 #include "sssp.cuh"
 
-void conventionParticipateSSSP(uint sourceNodeSample, string ssspPath) {
+void conventionParticipateSSSP(SIZE_TYPE sourceNodeSample, string ssspPath) {
     cout << "===============conventionParticipateSSSP==============" << endl;
-    uint testNumNodes = 0;
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
     ulong traverseSum = 0;
-    uint *nodePointersI;
+    SIZE_TYPE *nodePointersI;
     EdgeWithWeight *edgeList;
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(ssspPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
-    nodePointersI = new uint[testNumNodes];
+    nodePointersI = new SIZE_TYPE[testNumNodes];
 
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
     edgeList = new EdgeWithWeight[testNumEdge];
     infile.read((char *) edgeList, sizeof(EdgeWithWeight) * testNumEdge);
     infile.close();
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
     getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, 0.9, sizeof(EdgeWithWeight), 5);
-    uint partitionNum;
+    SIZE_TYPE partitionNum;
     if (testNumEdge > max_partition_size) {
         partitionNum = testNumEdge / max_partition_size + 1;
     } else {
         partitionNum = 1;
     }
 
-    uint *degree = new uint[testNumNodes];
-    uint *value = new uint[testNumNodes];
+    SIZE_TYPE *degree = new SIZE_TYPE[testNumNodes];
+    SIZE_TYPE *value = new SIZE_TYPE[testNumNodes];
     bool *isActiveNodeList = new bool[testNumNodes];
     CommonPartitionInfo *partitionInfoList = new CommonPartitionInfo[partitionNum];
     bool *needTransferPartition = new bool[partitionNum];
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         isActiveNodeList[i] = false;
         value[i] = UINT_MAX;
         if (i + 1 < testNumNodes) {
@@ -51,14 +51,14 @@ void conventionParticipateSSSP(uint sourceNodeSample, string ssspPath) {
             return;
         }
     }
-    for (uint i = 0; i < partitionNum; i++) {
+    for (SIZE_TYPE i = 0; i < partitionNum; i++) {
         partitionInfoList[i].startVertex = -1;
         partitionInfoList[i].endVertex = -1;
         partitionInfoList[i].nodePointerOffset = -1;
         partitionInfoList[i].partitionEdgeSize = -1;
     }
     int tempPartitionIndex = 0;
-    uint tempNodeIndex = 0;
+    SIZE_TYPE tempNodeIndex = 0;
     while (tempNodeIndex < testNumNodes) {
         if (partitionInfoList[tempPartitionIndex].startVertex == -1) {
             partitionInfoList[tempPartitionIndex].startVertex = tempNodeIndex;
@@ -77,22 +77,22 @@ void conventionParticipateSSSP(uint sourceNodeSample, string ssspPath) {
         }
     }
 
-    uint *degreeD;
+    SIZE_TYPE *degreeD;
     bool *isActiveNodeListD;
     bool *nextActiveNodeListD;
-    uint *nodePointerListD;
+    SIZE_TYPE *nodePointerListD;
     EdgeWithWeight *partitionEdgeListD;
-    uint *valueD;
+    SIZE_TYPE *valueD;
 
-    cudaMalloc(&degreeD, testNumNodes * sizeof(uint));
-    cudaMalloc(&valueD, testNumNodes * sizeof(uint));
+    cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE));
     cudaMalloc(&isActiveNodeListD, testNumNodes * sizeof(bool));
     cudaMalloc(&nextActiveNodeListD, testNumNodes * sizeof(bool));
-    cudaMalloc(&nodePointerListD, testNumNodes * sizeof(uint));
+    cudaMalloc(&nodePointerListD, testNumNodes * sizeof(SIZE_TYPE));
     cudaMalloc(&partitionEdgeListD, max_partition_size * sizeof(EdgeWithWeight));
 
-    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
-    cudaMemcpy(nodePointerListD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
+    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+    cudaMemcpy(nodePointerListD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     cudaMemset(nextActiveNodeListD, 0, testNumNodes * sizeof(bool));
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -101,7 +101,7 @@ void conventionParticipateSSSP(uint sourceNodeSample, string ssspPath) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = rand() % testNumNodes;
+        SIZE_TYPE sourceNode = rand() % testNumNodes;
         sourceNode = sourceNodeSample;
         //sourceNode = 25838548;
         //sourceNode = 26890152;
@@ -113,13 +113,13 @@ void conventionParticipateSSSP(uint sourceNodeSample, string ssspPath) {
         }
         isActiveNodeList[sourceNode] = true;
         value[sourceNode] = 1;
-        cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
-        uint activeSum = 0;
+        cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+        SIZE_TYPE activeSum = 0;
         int iteration = 0;
 
         auto startProcessing = std::chrono::steady_clock::now();
         while (true) {
-            uint activeNodeNum = 0;
+            SIZE_TYPE activeNodeNum = 0;
             checkNeedTransferPartitionOpt(needTransferPartition, partitionInfoList, isActiveNodeList, partitionNum,
                                           testNumNodes, activeNodeNum);
             if (activeNodeNum <= 0) {
@@ -165,23 +165,23 @@ void conventionParticipateSSSP(uint sourceNodeSample, string ssspPath) {
     cudaFree(partitionEdgeListD);
 }
 
-void ssspOpt(uint sourceNodeSample, string ssspPath, float adviseK) {
-    uint testNumNodes = 0;
+void ssspOpt(SIZE_TYPE sourceNodeSample, string ssspPath, float adviseK) {
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
-    uint *nodePointersI;
+    SIZE_TYPE *nodePointersI;
     EdgeWithWeight *edgeList;
     bool isUseShare = true;
 
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(ssspPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
 
-    nodePointersI = new uint[testNumNodes + 1];
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
+    nodePointersI = new SIZE_TYPE[testNumNodes + 1];
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
     edgeList = new EdgeWithWeight[testNumEdge + 1];
     infile.read((char *) edgeList, sizeof(EdgeWithWeight) * testNumEdge);
     infile.close();
@@ -192,9 +192,9 @@ void ssspOpt(uint sourceNodeSample, string ssspPath, float adviseK) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        //uint sourceNode = 25838548;
-        //uint sourceNode = 26890152;
-        uint sourceNode = 47235513;
+        //SIZE_TYPE sourceNode = 25838548;
+        //SIZE_TYPE sourceNode = 26890152;
+        SIZE_TYPE sourceNode = 47235513;
         sourceNode = sourceNodeSample;
         cout << i << " sourceNode " << sourceNode << endl;
         timeSum += ssspCaculateCommonMemoryInnerAsyncRandom(testNumNodes, testNumEdge, nodePointersI, edgeList,
@@ -205,23 +205,23 @@ void ssspOpt(uint sourceNodeSample, string ssspPath, float adviseK) {
     }
 }
 
-void ssspShare(uint sourceNodeSample, string ssspPath) {
-    uint testNumNodes = 0;
+void ssspShare(SIZE_TYPE sourceNodeSample, string ssspPath) {
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
-    uint *nodePointersI;
+    SIZE_TYPE *nodePointersI;
     EdgeWithWeight *edgeList;
 
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(ssspPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
-    gpuErrorcheck(cudaMallocManaged(&nodePointersI, (testNumNodes + 1) * sizeof(uint)));
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
+    gpuErrorcheck(cudaMallocManaged(&nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE)));
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
     gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(EdgeWithWeight)));
-    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
+    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
     cudaMemAdvise(edgeList, (numEdge) * sizeof(EdgeWithWeight), cudaMemAdviseSetReadMostly, 0);
     infile.read((char *) edgeList, sizeof(EdgeWithWeight) * testNumEdge);
     infile.close();
@@ -233,25 +233,25 @@ void ssspShare(uint sourceNodeSample, string ssspPath) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = sourceNodeSample;
+        SIZE_TYPE sourceNode = sourceNodeSample;
         cout << i << " sourceNode " << sourceNode << endl;
         ssspCaculateInShare(testNumNodes, testNumEdge, nodePointersI, edgeList, sourceNode);
         break;
     }
 }
 
-long ssspCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWithWeight *edgeList,
-                         uint sourceNode) {
+long ssspCaculateInShare(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, EdgeWithWeight *edgeList,
+                         SIZE_TYPE sourceNode) {
     cout << "==================ssspshare==============" << endl;
     auto start = std::chrono::steady_clock::now();
-    uint *degree;
-    uint *value;
-    uint sourceCode = 0;
-    gpuErrorcheck(cudaMallocManaged(&degree, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMallocManaged(&value, testNumNodes * sizeof(uint)));
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE sourceCode = 0;
+    gpuErrorcheck(cudaMallocManaged(&degree, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMallocManaged(&value, testNumNodes * sizeof(SIZE_TYPE)));
 
     auto startPreCaculate = std::chrono::steady_clock::now();
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
 
@@ -259,19 +259,19 @@ long ssspCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointers
     sourceCode = sourceNode;
     bool *label;
     gpuErrorcheck(cudaMallocManaged(&label, testNumNodes * sizeof(bool)));
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = false;
         value[i] = UINT_MAX - 1;
     }
 
     label[sourceCode] = true;
     value[sourceCode] = 1;
-    uint *activeNodeList;
-    cudaMallocManaged(&activeNodeList, testNumNodes * sizeof(uint));
+    SIZE_TYPE *activeNodeList;
+    cudaMallocManaged(&activeNodeList, testNumNodes * sizeof(SIZE_TYPE));
     //cacaulate the active node And make active node array
-    uint *activeNodeLabelingD;
+    SIZE_TYPE *activeNodeLabelingD;
     gpuErrorcheck(cudaMallocManaged(&activeNodeLabelingD, testNumNodes * sizeof(unsigned int)));
-    uint *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
     gpuErrorcheck(cudaMallocManaged(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     dim3 grid = dim3(56, 1, 1);
     dim3 block = dim3(1024, 1, 1);
@@ -284,10 +284,10 @@ long ssspCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointers
     setLabeling<<<grid, block>>>(testNumNodes, label, activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling(activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling_prefixsum(activeNodeLabelingPrefixD);
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
-    //vector<vector<uint>> visitRecordByIteration;
+    SIZE_TYPE nodeSum = activeNodesNum;
+    //vector<vector<SIZE_TYPE>> visitRecordByIteration;
     while (activeNodesNum > 0) {
         iter++;
         thrust::exclusive_scan(ptr_labeling, ptr_labeling + testNumNodes, ptr_labeling_prefixsum);
@@ -341,7 +341,7 @@ void ssspDynamic(int tId,
         fromHere = activeNodesPointer[i];
         fromThere = nodePointer[thisNode];
         for (unsigned int j = 0; j < thisDegree; j++) {
-            uint temToNode, temWeight;
+            SIZE_TYPE temToNode, temWeight;
             temToNode = edgeList[fromThere + j].toNode;
             temWeight = edgeList[fromThere + j].weight;
             edgeListOverload[fromHere + j].toNode = temToNode;
@@ -351,13 +351,13 @@ void ssspDynamic(int tId,
 
 }
 
-void ssspKernelThread(uint staticNodeNum, uint *activeNodeListD,
-                      uint *staticNodePointerD, uint *degreeD,
-                      EdgeWithWeight *staticEdgeListD, uint *valueD,
-                      uint *isActiveD1,
-                      uint *isActiveD2,
+void ssspKernelThread(SIZE_TYPE staticNodeNum, SIZE_TYPE *activeNodeListD,
+                      SIZE_TYPE *staticNodePointerD, SIZE_TYPE *degreeD,
+                      EdgeWithWeight *staticEdgeListD, SIZE_TYPE *valueD,
+                      SIZE_TYPE *isActiveD1,
+                      SIZE_TYPE *isActiveD2,
                       bool *isFinishedManaged, dim3 grid, dim3 block, cudaStream_t steamStatic) {
-    uint itr = 0;
+    SIZE_TYPE itr = 0;
     bool isFinishedHost = true;
     do {
         itr++;
@@ -377,8 +377,8 @@ void ssspKernelThread(uint staticNodeNum, uint *activeNodeListD,
 }
 
 long
-ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWithWeight *edgeList,
-                                   uint sourceNode, float adviseK) {
+ssspCaculateCommonMemoryInnerAsync(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, EdgeWithWeight *edgeList,
+                                   SIZE_TYPE sourceNode, float adviseK) {
     cout << "=========ssspCaculateCommonMemoryInnerAsync========" << endl;
     ulong edgeIterationMax = 0;
     auto start = std::chrono::steady_clock::now();
@@ -386,22 +386,22 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
     ulong transferSum = 0;
     //CPU
     long durationRead;
-    uint fragmentNum = testNumEdge / fragment_size;
+    SIZE_TYPE fragmentNum = testNumEdge / fragment_size;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint staticFragmentNum;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
-    uint *staticFragmentToNormalMap;
+    SIZE_TYPE staticFragmentNum;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
+    SIZE_TYPE *staticFragmentToNormalMap;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *staticFragmentData;
-    uint *overloadFragmentData;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *staticFragmentData;
+    SIZE_TYPE *overloadFragmentData;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     EdgeWithWeight *overloadEdgeList;
     FragmentData *fragmentData;
@@ -410,48 +410,48 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
     EdgeWithWeight *staticEdgeListD;
     EdgeWithWeight *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *nodePointerD;
-    uint *staticFragmentVisitRecordsD;
-    uint *staticFragmentDataD;
-    uint *canSwapStaticFragmentDataD;
-    uint *canSwapFragmentPrefixSumD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *nodePointerD;
+    SIZE_TYPE *staticFragmentVisitRecordsD;
+    SIZE_TYPE *staticFragmentDataD;
+    SIZE_TYPE *canSwapStaticFragmentDataD;
+    SIZE_TYPE *canSwapFragmentPrefixSumD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isActiveD2;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isActiveD2;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
     bool *isFinishedDevice;
 
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
     fragmentData = new FragmentData[fragmentNum];
 
     getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(EdgeWithWeight), testNumEdge,
                         15);
 
     staticFragmentNum = max_partition_size / fragment_size;
-    staticFragmentToNormalMap = new uint[staticFragmentNum];
-    staticFragmentData = new uint[staticFragmentNum];
-    overloadFragmentData = new uint[fragmentNum];
+    staticFragmentToNormalMap = new SIZE_TYPE[staticFragmentNum];
+    staticFragmentData = new SIZE_TYPE[staticFragmentNum];
+    overloadFragmentData = new SIZE_TYPE[fragmentNum];
     //caculate degree
-    uint meanDegree = testNumEdge / testNumNodes;
+    SIZE_TYPE meanDegree = testNumEdge / testNumNodes;
     cout << " meanDegree " << meanDegree << endl;
-    uint degree0Sum = 0;
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    SIZE_TYPE degree0Sum = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -459,7 +459,7 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
-    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
+    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
 
     //caculate static staticEdgeListD
     gpuErrorcheck(cudaMalloc(&isFinishedDevice, 1 * sizeof(bool)));
@@ -473,18 +473,18 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
     cout << "move duration " << testDuration << endl;
 
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
-    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMalloc(&nodePointerD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(nodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
+    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&nodePointerD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(nodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
 
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX;
 
-        uint pointStartFragmentIndex = nodePointersI[i] / fragment_size;
-        uint pointEndFragmentIndex =
+        SIZE_TYPE pointStartFragmentIndex = nodePointersI[i] / fragment_size;
+        SIZE_TYPE pointEndFragmentIndex =
                 degree[i] == 0 ? pointStartFragmentIndex : (nodePointersI[i] + degree[i] - 1) / fragment_size;
         if (pointStartFragmentIndex == pointEndFragmentIndex && pointStartFragmentIndex >= 0 &&
             pointStartFragmentIndex < fragmentNum) {
@@ -511,38 +511,38 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
     for (int i = 0; i < staticFragmentNum; i++) {
         fragmentData[i].isIn = true;
     }
-    for (uint i = 0; i < staticFragmentNum; i++) {
+    for (SIZE_TYPE i = 0; i < staticFragmentNum; i++) {
         staticFragmentToNormalMap[i] = i;
     }
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
     //overloadEdgeList = (EdgeWithWeight *) malloc(overloadSize * sizeof(EdgeWithWeight));
     overloadEdgeList = new EdgeWithWeight[overloadSize];
     gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(EdgeWithWeight)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(uint)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(SIZE_TYPE)));
     thrust::device_ptr<unsigned int> ptr_canSwapFragment(canSwapStaticFragmentDataD);
     thrust::device_ptr<unsigned int> ptr_canSwapFragmentPrefixSum(canSwapFragmentPrefixSumD);
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -556,9 +556,9 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(activeOverloadNodePointersD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     ulong overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
@@ -589,14 +589,14 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
     auto startMemoryTraverse = std::chrono::steady_clock::now();
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
-    uint cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
+    SIZE_TYPE cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
     auto startProcessing = std::chrono::steady_clock::now();
     auto startTest = std::chrono::steady_clock::now();
     auto endTest = std::chrono::steady_clock::now();
@@ -608,13 +608,13 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
         cleanStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isStaticActive, isOverloadActive);
         setStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                    isInStaticD);
-        uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+        SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
         cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
         thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
         setStaticActiveNodeArray<<<grid, block>>>(testNumNodes, activeNodeListD, isStaticActive,
                                                   activeNodeLabelingPrefixD);
 
-        uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+        SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
         cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
 
         thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes, ptr_labeling_prefixsum);
@@ -623,7 +623,7 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
                                                     activeNodeLabelingPrefixD, degreeD);
 
         thrust::exclusive_scan(ptrOverloadDegree, ptrOverloadDegree + overloadNodeNum, activeOverloadNodePointersD);
-        uint overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
+        SIZE_TYPE overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
                                               ptrOverloadDegree + overloadNodeNum, 0);
         cout << "iter " << iter << " overloadEdgeNum " << overloadEdgeNum << endl;
         overloadEdgeSum += overloadEdgeNum;
@@ -650,11 +650,11 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
 
         if (overloadNodeNum > 0) {
             startCpu = std::chrono::steady_clock::now();
-            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);*/
-            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);
-            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                             cudaMemcpyDeviceToHost, streamDynamic);
 
             int threadNum = 20;
@@ -710,7 +710,7 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
                                                                        i.partStartIndex,
                                                                        overloadNodeListD, isActiveD1,
                                                                        isActiveD2);
-                uint itr = 0;
+                SIZE_TYPE itr = 0;
                 bool isFinishedHost = true;
                 do {
                     itr++;
@@ -830,30 +830,30 @@ ssspCaculateCommonMemoryInnerAsync(uint testNumNodes, uint testNumEdge, uint *no
 }
 
 long
-ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWithWeight *edgeList,
-                uint sourceNode) {
+ssspCaculateUVM(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, EdgeWithWeight *edgeList,
+                SIZE_TYPE sourceNode) {
     cout << "=========ssspCaculateCommonMemoryInnerAsync========" << endl;
     auto start = std::chrono::steady_clock::now();
     auto startPreCaculate = std::chrono::steady_clock::now();
     ulong transferSum = 0;
     //CPU
     long durationRead;
-    uint fragmentNum = testNumEdge / fragment_size;
+    SIZE_TYPE fragmentNum = testNumEdge / fragment_size;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint staticFragmentNum;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
-    uint *staticFragmentToNormalMap;
+    SIZE_TYPE staticFragmentNum;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
+    SIZE_TYPE *staticFragmentToNormalMap;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *staticFragmentData;
-    uint *overloadFragmentData;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *staticFragmentData;
+    SIZE_TYPE *overloadFragmentData;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     //vector<PartEdgeListInfo> partEdgeListInfoArr;
     EdgeWithWeight *overloadEdgeListManage;
     FragmentData *fragmentData;
@@ -862,48 +862,48 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
     EdgeWithWeight *staticEdgeListD;
     //EdgeWithWeight *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *nodePointerD;
-    uint *staticFragmentVisitRecordsD;
-    uint *staticFragmentDataD;
-    uint *canSwapStaticFragmentDataD;
-    uint *canSwapFragmentPrefixSumD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *nodePointerD;
+    SIZE_TYPE *staticFragmentVisitRecordsD;
+    SIZE_TYPE *staticFragmentDataD;
+    SIZE_TYPE *canSwapStaticFragmentDataD;
+    SIZE_TYPE *canSwapFragmentPrefixSumD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isActiveD2;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isActiveD2;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
     bool *isFinishedDevice;
 
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
     fragmentData = new FragmentData[fragmentNum];
 
     getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, 0.88, sizeof(EdgeWithWeight), testNumEdge,
                         15);
 
     staticFragmentNum = max_partition_size / fragment_size;
-    staticFragmentToNormalMap = new uint[staticFragmentNum];
-    staticFragmentData = new uint[staticFragmentNum];
-    overloadFragmentData = new uint[fragmentNum];
+    staticFragmentToNormalMap = new SIZE_TYPE[staticFragmentNum];
+    staticFragmentData = new SIZE_TYPE[staticFragmentNum];
+    overloadFragmentData = new SIZE_TYPE[fragmentNum];
     //caculate degree
-    uint meanDegree = testNumEdge / testNumNodes;
+    SIZE_TYPE meanDegree = testNumEdge / testNumNodes;
     cout << " meanDegree " << meanDegree << endl;
-    uint degree0Sum = 0;
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    SIZE_TYPE degree0Sum = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -911,7 +911,7 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
-    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
+    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
 
     //caculate static staticEdgeListD
     gpuErrorcheck(cudaMalloc(&isFinishedDevice, 1 * sizeof(bool)));
@@ -919,18 +919,18 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
     gpuErrorcheck(
             cudaMemcpy(staticEdgeListD, edgeList, max_partition_size * sizeof(EdgeWithWeight), cudaMemcpyHostToDevice));
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
-    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMalloc(&nodePointerD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(nodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
+    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&nodePointerD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(nodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
 
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX;
 
-        uint pointStartFragmentIndex = nodePointersI[i] / fragment_size;
-        uint pointEndFragmentIndex =
+        SIZE_TYPE pointStartFragmentIndex = nodePointersI[i] / fragment_size;
+        SIZE_TYPE pointEndFragmentIndex =
                 degree[i] == 0 ? pointStartFragmentIndex : (nodePointersI[i] + degree[i] - 1) / fragment_size;
         if (pointStartFragmentIndex == pointEndFragmentIndex && pointStartFragmentIndex >= 0 &&
             pointStartFragmentIndex < fragmentNum) {
@@ -957,39 +957,39 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
     for (int i = 0; i < staticFragmentNum; i++) {
         fragmentData[i].isIn = true;
     }
-    for (uint i = 0; i < staticFragmentNum; i++) {
+    for (SIZE_TYPE i = 0; i < staticFragmentNum; i++) {
         staticFragmentToNormalMap[i] = i;
     }
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
     //overloadEdgeList = (EdgeWithWeight *) malloc(overloadSize * sizeof(EdgeWithWeight));
     gpuErrorcheck(cudaMallocManaged(&overloadEdgeListManage, overloadSize * sizeof(EdgeWithWeight)));
     //overloadEdgeList = new EdgeWithWeight[overloadSize];
     //gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(EdgeWithWeight)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(uint)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(SIZE_TYPE)));
     thrust::device_ptr<unsigned int> ptr_canSwapFragment(canSwapStaticFragmentDataD);
     thrust::device_ptr<unsigned int> ptr_canSwapFragmentPrefixSum(canSwapFragmentPrefixSumD);
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -1003,10 +1003,10 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(activeOverloadNodePointersD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
-    uint overloadEdgeSum = 0;
+    SIZE_TYPE nodeSum = activeNodesNum;
+    SIZE_TYPE overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
     long durationReadCpu = 0;
@@ -1037,14 +1037,14 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
     auto startProcessing = std::chrono::steady_clock::now();
-    uint cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
+    SIZE_TYPE cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
 
     while (activeNodesNum > 0) {
         iter++;
@@ -1053,13 +1053,13 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
         cleanStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isStaticActive, isOverloadActive);
         setStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                    isInStaticD);
-        uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+        SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
         cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
         thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
         setStaticActiveNodeArray<<<grid, block>>>(testNumNodes, activeNodeListD, isStaticActive,
                                                   activeNodeLabelingPrefixD);
 
-        uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+        SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
         cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
 
         thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes, ptr_labeling_prefixsum);
@@ -1068,7 +1068,7 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
                                                     activeNodeLabelingPrefixD, degreeD);
 
         thrust::exclusive_scan(ptrOverloadDegree, ptrOverloadDegree + overloadNodeNum, activeOverloadNodePointersD);
-        uint overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
+        SIZE_TYPE overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
                                               ptrOverloadDegree + overloadNodeNum, 0);
         cout << "iter " << iter << " overloadEdgeNum " << overloadEdgeNum << endl;
         overloadEdgeSum += overloadEdgeNum;
@@ -1090,11 +1090,11 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
                                          steamStatic);
         if (overloadNodeNum > 0) {
             startCpu = std::chrono::steady_clock::now();
-            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);*/
-            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);
-            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                             cudaMemcpyDeviceToHost, streamDynamic);
 
             int threadNum = 20;
@@ -1176,9 +1176,9 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
         } */
     }
     cudaDeviceSynchronize();
-    /*cudaMemcpy(value, valueD, testNumNodes * sizeof(uint), cudaMemcpyDeviceToHost);
-    uint sum1 = 0;
-    for (uint i = 0; i < testNumNodes; i++) {
+    /*cudaMemcpy(value, valueD, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+    SIZE_TYPE sum1 = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         if (value[i] == 1) {
             sum1++;
         }
@@ -1244,9 +1244,9 @@ ssspCaculateUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWi
 }
 
 long
-ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdge, uint *nodePointersI,
+ssspCaculateCommonMemoryInnerAsyncVisitRecord(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI,
                                               EdgeWithWeight *edgeList,
-                                              uint sourceNode, float adviseK) {
+                                              SIZE_TYPE sourceNode, float adviseK) {
     cout << "=========ssspCaculateCommonMemoryInnerAsync========" << endl;
     ulong edgeIterationMax = 0;
     auto start = std::chrono::steady_clock::now();
@@ -1254,22 +1254,22 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
     ulong transferSum = 0;
     //CPU
     long durationRead;
-    uint fragmentNum = testNumEdge / fragment_size;
+    SIZE_TYPE fragmentNum = testNumEdge / fragment_size;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint staticFragmentNum;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
-    uint *staticFragmentToNormalMap;
+    SIZE_TYPE staticFragmentNum;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
+    SIZE_TYPE *staticFragmentToNormalMap;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *staticFragmentData;
-    uint *overloadFragmentData;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *staticFragmentData;
+    SIZE_TYPE *overloadFragmentData;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     EdgeWithWeight *overloadEdgeList;
     FragmentData *fragmentData;
@@ -1278,53 +1278,53 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
     EdgeWithWeight *staticEdgeListD;
     EdgeWithWeight *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *nodePointerD;
-    uint *staticFragmentVisitRecordsD;
-    uint *staticFragmentDataD;
-    uint *canSwapStaticFragmentDataD;
-    uint *canSwapFragmentPrefixSumD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *nodePointerD;
+    SIZE_TYPE *staticFragmentVisitRecordsD;
+    SIZE_TYPE *staticFragmentDataD;
+    SIZE_TYPE *canSwapStaticFragmentDataD;
+    SIZE_TYPE *canSwapFragmentPrefixSumD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isActiveD2;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isActiveD2;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
     bool *isFinishedDevice;
-    uint *vertexVisitRecord;
-    uint *vertexVisitRecordD;
-    vertexVisitRecord = new uint[testNumNodes];
-    cudaMalloc(&vertexVisitRecordD, testNumNodes * sizeof(uint));
-    cudaMemset(vertexVisitRecordD, 0, testNumNodes * sizeof(uint));
+    SIZE_TYPE *vertexVisitRecord;
+    SIZE_TYPE *vertexVisitRecordD;
+    vertexVisitRecord = new SIZE_TYPE[testNumNodes];
+    cudaMalloc(&vertexVisitRecordD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMemset(vertexVisitRecordD, 0, testNumNodes * sizeof(SIZE_TYPE));
 
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
     fragmentData = new FragmentData[fragmentNum];
 
     getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(EdgeWithWeight), testNumEdge,
                         16);
 
     staticFragmentNum = max_partition_size / fragment_size;
-    staticFragmentToNormalMap = new uint[staticFragmentNum];
-    staticFragmentData = new uint[staticFragmentNum];
-    overloadFragmentData = new uint[fragmentNum];
+    staticFragmentToNormalMap = new SIZE_TYPE[staticFragmentNum];
+    staticFragmentData = new SIZE_TYPE[staticFragmentNum];
+    overloadFragmentData = new SIZE_TYPE[fragmentNum];
     //caculate degree
-    uint meanDegree = testNumEdge / testNumNodes;
+    SIZE_TYPE meanDegree = testNumEdge / testNumNodes;
     cout << " meanDegree " << meanDegree << endl;
-    uint degree0Sum = 0;
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    SIZE_TYPE degree0Sum = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -1332,7 +1332,7 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
-    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
+    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
 
     //caculate static staticEdgeListD
     gpuErrorcheck(cudaMalloc(&isFinishedDevice, 1 * sizeof(bool)));
@@ -1346,18 +1346,18 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
     cout << "move duration " << testDuration << endl;
 
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
-    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMalloc(&nodePointerD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(nodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
+    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&nodePointerD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(nodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
 
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX;
 
-        uint pointStartFragmentIndex = nodePointersI[i] / fragment_size;
-        uint pointEndFragmentIndex =
+        SIZE_TYPE pointStartFragmentIndex = nodePointersI[i] / fragment_size;
+        SIZE_TYPE pointEndFragmentIndex =
                 degree[i] == 0 ? pointStartFragmentIndex : (nodePointersI[i] + degree[i] - 1) / fragment_size;
         if (pointStartFragmentIndex == pointEndFragmentIndex && pointStartFragmentIndex >= 0 &&
             pointStartFragmentIndex < fragmentNum) {
@@ -1384,38 +1384,38 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
     for (int i = 0; i < staticFragmentNum; i++) {
         fragmentData[i].isIn = true;
     }
-    for (uint i = 0; i < staticFragmentNum; i++) {
+    for (SIZE_TYPE i = 0; i < staticFragmentNum; i++) {
         staticFragmentToNormalMap[i] = i;
     }
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
     //overloadEdgeList = (EdgeWithWeight *) malloc(overloadSize * sizeof(EdgeWithWeight));
     overloadEdgeList = new EdgeWithWeight[overloadSize];
     gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(EdgeWithWeight)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(uint)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(SIZE_TYPE)));
     thrust::device_ptr<unsigned int> ptr_canSwapFragment(canSwapStaticFragmentDataD);
     thrust::device_ptr<unsigned int> ptr_canSwapFragmentPrefixSum(canSwapFragmentPrefixSumD);
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -1429,9 +1429,9 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(activeOverloadNodePointersD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     ulong overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
@@ -1463,14 +1463,14 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
     auto startProcessing = std::chrono::steady_clock::now();
-    uint cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
+    SIZE_TYPE cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
 
     while (activeNodesNum > 0) {
         iter++;
@@ -1479,13 +1479,13 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
         cleanStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isStaticActive, isOverloadActive);
         setStaticAndOverloadLabelAndRecord<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                             isInStaticD, vertexVisitRecordD);
-        uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+        SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
         //cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
         thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
         setStaticActiveNodeArray<<<grid, block>>>(testNumNodes, activeNodeListD, isStaticActive,
                                                   activeNodeLabelingPrefixD);
 
-        uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+        SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
         //cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
 
         thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes, ptr_labeling_prefixsum);
@@ -1494,7 +1494,7 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
                                                     activeNodeLabelingPrefixD, degreeD);
 
         thrust::exclusive_scan(ptrOverloadDegree, ptrOverloadDegree + overloadNodeNum, activeOverloadNodePointersD);
-        uint overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
+        SIZE_TYPE overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
                                               ptrOverloadDegree + overloadNodeNum, 0);
         //cout << "iter " << iter << " overloadEdgeNum " << overloadEdgeNum << endl;
         overloadEdgeSum += overloadEdgeNum;
@@ -1524,11 +1524,11 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
 
         if (overloadNodeNum > 0) {
             startCpu = std::chrono::steady_clock::now();
-            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);*/
-            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);
-            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                             cudaMemcpyDeviceToHost, streamDynamic);
 
             int threadNum = 20;
@@ -1584,7 +1584,7 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
                                                                        partEdgeListInfoArr[i].partStartIndex,
                                                                        overloadNodeListD, isActiveD1,
                                                                        isActiveD2);
-                uint itr = 0;
+                SIZE_TYPE itr = 0;
                 bool isFinishedHost = true;
                 do {
                     itr++;
@@ -1637,15 +1637,15 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
     cout << "nodeSum: " << nodeSum << endl;
     auto endRead = std::chrono::steady_clock::now();
     durationRead = std::chrono::duration_cast<std::chrono::milliseconds>(endRead - startProcessing).count();
-    cudaMemcpy(vertexVisitRecord, vertexVisitRecordD, testNumNodes * sizeof(uint), cudaMemcpyDeviceToHost);
-    uint partNum = 50;
-    uint partSize = testNumEdge / partNum;
-    vector<uint> partVistRecordList(partNum + 1);
-    uint partSizeCursor = 0;
-    for (uint i = 0; i < testNumNodes; i++) {
-        uint edgeStartIndex = nodePointersI[i];
-        uint edgeEndIndex = nodePointersI[i] + degree[i];
-        uint maxPartIndex = partSizeCursor * partSize + partSize;
+    cudaMemcpy(vertexVisitRecord, vertexVisitRecordD, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+    SIZE_TYPE partNum = 50;
+    SIZE_TYPE partSize = testNumEdge / partNum;
+    vector<SIZE_TYPE> partVistRecordList(partNum + 1);
+    SIZE_TYPE partSizeCursor = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
+        SIZE_TYPE edgeStartIndex = nodePointersI[i];
+        SIZE_TYPE edgeEndIndex = nodePointersI[i] + degree[i];
+        SIZE_TYPE maxPartIndex = partSizeCursor * partSize + partSize;
 
         if (edgeStartIndex < maxPartIndex && edgeEndIndex < maxPartIndex) {
             partVistRecordList[partSizeCursor] += vertexVisitRecord[i] * degree[i];
@@ -1658,10 +1658,10 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
             partVistRecordList[partSizeCursor] += vertexVisitRecord[i] * degree[i];
         }
     }
-    for (uint i = 0; i < partNum + 1; i++) {
+    for (SIZE_TYPE i = 0; i < partNum + 1; i++) {
         cout << "part " << i << " is " << partVistRecordList[i] << endl;
     }
-    for (uint i = 0; i < partNum + 1; i++) {
+    for (SIZE_TYPE i = 0; i < partNum + 1; i++) {
         cout << partVistRecordList[i] << "\t";
     }
 
@@ -1726,23 +1726,23 @@ ssspCaculateCommonMemoryInnerAsyncVisitRecord(uint testNumNodes, uint testNumEdg
 }
 
 
-void ssspShareTrace(uint sourceNodeSample, string ssspPath) {
-    uint testNumNodes = 0;
+void ssspShareTrace(SIZE_TYPE sourceNodeSample, string ssspPath) {
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
-    uint *nodePointersI;
+    SIZE_TYPE *nodePointersI;
     EdgeWithWeight *edgeList;
 
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(ssspPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
-    nodePointersI = new uint[testNumNodes];
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
+    nodePointersI = new SIZE_TYPE[testNumNodes];
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
     gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(EdgeWithWeight)));
-    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
+    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
     cudaMemAdvise(edgeList, (numEdge) * sizeof(EdgeWithWeight), cudaMemAdviseSetReadMostly, 0);
     infile.read((char *) edgeList, sizeof(EdgeWithWeight) * testNumEdge);
     infile.close();
@@ -1754,54 +1754,54 @@ void ssspShareTrace(uint sourceNodeSample, string ssspPath) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = sourceNodeSample;
+        SIZE_TYPE sourceNode = sourceNodeSample;
         cout << i << " sourceNode " << sourceNode << endl;
         ssspCaculateInShareTrace(testNumNodes, testNumEdge, nodePointersI, edgeList, sourceNode);
         break;
     }
 }
 
-long ssspCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePointersI, EdgeWithWeight *edgeList,
-                              uint sourceNode) {
+long ssspCaculateInShareTrace(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, EdgeWithWeight *edgeList,
+                              SIZE_TYPE sourceNode) {
     cout << "==================ssspshare==============" << endl;
     auto start = std::chrono::steady_clock::now();
-    uint *degree = new uint[testNumNodes];
-    uint *value = new uint[testNumNodes];
-    uint sourceCode = 0;
+    SIZE_TYPE *degree = new SIZE_TYPE[testNumNodes];
+    SIZE_TYPE *value = new SIZE_TYPE[testNumNodes];
+    SIZE_TYPE sourceCode = 0;
 
     auto startPreCaculate = std::chrono::steady_clock::now();
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
 
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
     sourceCode = sourceNode;
     bool *label = new bool[testNumNodes];
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = false;
         value[i] = UINT_MAX;
     }
 
     label[sourceCode] = true;
     value[sourceCode] = 1;
-    uint *activeNodeListD;
-    uint *degreeD;
-    uint *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *degreeD;
+    SIZE_TYPE *valueD;
     bool *labelD;
-    uint *nodePointersD;
-    cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint));
-    cudaMalloc(&nodePointersD, testNumNodes * sizeof(uint));
-    cudaMalloc(&degreeD, testNumNodes * sizeof(uint));
-    cudaMalloc(&valueD, testNumNodes * sizeof(uint));
+    SIZE_TYPE *nodePointersD;
+    cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&nodePointersD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE));
     cudaMalloc(&labelD, testNumNodes * sizeof(bool));
-    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
-    cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
+    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+    cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     cudaMemcpy(labelD, label, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
-    cudaMemcpy(nodePointersD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
+    cudaMemcpy(nodePointersD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     //cacaulate the active node And make active node array
-    uint *activeNodeLabelingD;
+    SIZE_TYPE *activeNodeLabelingD;
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingD, testNumNodes * sizeof(unsigned int)));
-    uint *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     dim3 grid = dim3(56, 1, 1);
     dim3 block = dim3(1024, 1, 1);
@@ -1814,9 +1814,9 @@ long ssspCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePoi
     setLabeling<<<grid, block>>>(testNumNodes, labelD, activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling(activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling_prefixsum(activeNodeLabelingPrefixD);
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     while (activeNodesNum > 0) {
         iter++;
         thrust::exclusive_scan(ptr_labeling, ptr_labeling + testNumNodes, ptr_labeling_prefixsum);
@@ -1827,14 +1827,14 @@ long ssspCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePoi
         cudaDeviceSynchronize();
         gpuErrorcheck(cudaPeekAtLastError());
         long temp = 0;
-        for (uint j = 0; j < testNumEdge; j++) {
+        for (SIZE_TYPE j = 0; j < testNumEdge; j++) {
             temp += edgeList[j].toNode % 10;
         }
         cout << "iter " << iter << " " << temp;
 
-        cudaMemAdvise(edgeList, testNumEdge * sizeof(uint), cudaMemAdviseSetAccessedBy,
+        cudaMemAdvise(edgeList, testNumEdge * sizeof(SIZE_TYPE), cudaMemAdviseSetAccessedBy,
                       cudaCpuDeviceId);
-        cudaMemAdvise(edgeList, testNumEdge * sizeof(uint), cudaMemAdviseUnsetAccessedBy,
+        cudaMemAdvise(edgeList, testNumEdge * sizeof(SIZE_TYPE), cudaMemAdviseUnsetAccessedBy,
                       cudaCpuDeviceId);
 
         setLabeling<<<grid, block>>>(testNumNodes, labelD, activeNodeLabelingD);
@@ -1853,9 +1853,9 @@ long ssspCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePoi
 }
 
 long
-ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, uint *nodePointersI,
+ssspCaculateCommonMemoryInnerAsyncRandom(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI,
                                          EdgeWithWeight *edgeList,
-                                         uint sourceNode, float adviseK) {
+                                         SIZE_TYPE sourceNode, float adviseK) {
     cout << "=========ssspCaculateCommonMemoryInnerAsyncRandom========" << endl;
     ulong edgeIterationMax = 0;
     auto start = std::chrono::steady_clock::now();
@@ -1863,22 +1863,22 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
     ulong transferSum = 0;
     //CPU
     long durationRead;
-    uint fragmentNum = testNumEdge / fragment_size;
+    SIZE_TYPE fragmentNum = testNumEdge / fragment_size;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint staticFragmentNum;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
-    uint *staticFragmentToNormalMap;
+    SIZE_TYPE staticFragmentNum;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
+    SIZE_TYPE *staticFragmentToNormalMap;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *staticFragmentData;
-    uint *overloadFragmentData;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *staticFragmentData;
+    SIZE_TYPE *overloadFragmentData;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     EdgeWithWeight *overloadEdgeList;
     FragmentData *fragmentData;
@@ -1887,53 +1887,53 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
     EdgeWithWeight *staticEdgeListD;
     EdgeWithWeight *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *nodePointerD;
-    uint *staticFragmentVisitRecordsD;
-    uint *staticFragmentDataD;
-    uint *canSwapStaticFragmentDataD;
-    uint *canSwapFragmentPrefixSumD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *nodePointerD;
+    SIZE_TYPE *staticFragmentVisitRecordsD;
+    SIZE_TYPE *staticFragmentDataD;
+    SIZE_TYPE *canSwapStaticFragmentDataD;
+    SIZE_TYPE *canSwapFragmentPrefixSumD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isActiveD2;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isActiveD2;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
     bool *isFinishedDevice;
     gpuErrorcheck(cudaMalloc(&isFinishedDevice, 1 * sizeof(bool)));
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
     fragmentData = new FragmentData[fragmentNum];
 
     getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(EdgeWithWeight), testNumEdge,
                         15);
 
     staticFragmentNum = max_partition_size / fragment_size;
-    staticFragmentToNormalMap = new uint[staticFragmentNum];
-    staticFragmentData = new uint[staticFragmentNum];
-    overloadFragmentData = new uint[fragmentNum];
+    staticFragmentToNormalMap = new SIZE_TYPE[staticFragmentNum];
+    staticFragmentData = new SIZE_TYPE[staticFragmentNum];
+    overloadFragmentData = new SIZE_TYPE[fragmentNum];
     //caculate degree
-    uint meanDegree = testNumEdge / testNumNodes;
+    SIZE_TYPE meanDegree = testNumEdge / testNumNodes;
     cout << " meanDegree " << meanDegree << endl;
     calculateDegree(testNumNodes, nodePointersI, testNumEdge, degree);
-    //memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
-    uint edgesInStatic = 0;
+    //memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
+    SIZE_TYPE edgesInStatic = 0;
     float startRate = (1 - (float) max_partition_size / (float) testNumEdge) / 2;
-    uint startIndex = (float) testNumNodes * startRate;
-    /*uint tempStaticSum = 0;
-    for (uint i = testNumNodes - 1; i >= 0; i--) {
+    SIZE_TYPE startIndex = (float) testNumNodes * startRate;
+    /*SIZE_TYPE tempStaticSum = 0;
+    for (SIZE_TYPE i = testNumNodes - 1; i >= 0; i--) {
         tempStaticSum += degree[i];
         if (tempStaticSum > max_partition_size) {
             startIndex = i;
@@ -1945,7 +1945,7 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
         startIndex = (float) testNumNodes * 0.1f;
     }
     startIndex = (float) testNumNodes * 0.1f;
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX;
         if (i >= startIndex && nodePointersI[i] < nodePointersI[startIndex] + max_partition_size - degree[i]) {
@@ -1972,42 +1972,42 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
     cout << "move duration " << testDuration << endl;
 
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
     gpuErrorcheck(
-            cudaMemcpy(staticNodePointerD, staticNodePointer, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+            cudaMemcpy(staticNodePointerD, staticNodePointer, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
     cudaMemcpy(isInStaticD, isInStatic, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
     label[sourceNode] = 1;
     value[sourceNode] = 1;
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - edgesInStatic;
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - edgesInStatic;
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
     //overloadEdgeList = (EdgeWithWeight *) malloc(overloadSize * sizeof(EdgeWithWeight));
     overloadEdgeList = new EdgeWithWeight[overloadSize];
     gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(EdgeWithWeight)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(uint)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(SIZE_TYPE)));
     thrust::device_ptr<unsigned int> ptr_canSwapFragment(canSwapStaticFragmentDataD);
     thrust::device_ptr<unsigned int> ptr_canSwapFragmentPrefixSum(canSwapFragmentPrefixSumD);
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD2, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -2021,9 +2021,9 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(activeOverloadNodePointersD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     ulong overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
@@ -2054,30 +2054,30 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
     auto startMemoryTraverse = std::chrono::steady_clock::now();
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
-    uint cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
+    SIZE_TYPE cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
     long TIME = 0;
     int testTimes = 1;
     for (int testIndex = 0; testIndex < testTimes; testIndex++) {
 
-        for (uint i = 0; i < testNumNodes; i++) {
+        for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
             label[i] = 0;
             value[i] = UINT_MAX;
         }
         label[sourceNode] = 1;
         value[sourceNode] = 1;
         cudaMemcpy(isInStaticD, isInStatic, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
-        gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-        gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-        gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(uint)));
-        gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-        gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+        gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+        gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+        gpuErrorcheck(cudaMemset(isActiveD2, 0, testNumNodes * sizeof(SIZE_TYPE)));
+        gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+        gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
         activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
         iter = 0;
 
@@ -2092,13 +2092,13 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
             cleanStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isStaticActive, isOverloadActive);
             setStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                        isInStaticD);
-            uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+            SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
             //cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
             thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
             setStaticActiveNodeArray<<<grid, block>>>(testNumNodes, activeNodeListD, isStaticActive,
                                                       activeNodeLabelingPrefixD);
 
-            uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+            SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
             //cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
 
             thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes, ptr_labeling_prefixsum);
@@ -2107,7 +2107,7 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
                                                         activeNodeLabelingPrefixD, degreeD);
 
             thrust::exclusive_scan(ptrOverloadDegree, ptrOverloadDegree + overloadNodeNum, activeOverloadNodePointersD);
-            uint overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
+            SIZE_TYPE overloadEdgeNum = thrust::reduce(thrust::device, ptrOverloadDegree,
                                                   ptrOverloadDegree + overloadNodeNum, 0);
             //cout << "iter " << iter << " overloadEdgeNum " << overloadEdgeNum << endl;
             overloadEdgeSum += overloadEdgeNum;
@@ -2135,12 +2135,12 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
 
             if (overloadNodeNum > 0) {
                 startCpu = std::chrono::steady_clock::now();
-                /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(uint), cudaMemcpyDeviceToHost,
+                /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                                 streamDynamic);*/
-                cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost,
                                 streamDynamic);
-                cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost, streamDynamic);
 
                 int threadNum = 20;
@@ -2195,7 +2195,7 @@ ssspCaculateCommonMemoryInnerAsyncRandom(uint testNumNodes, uint testNumEdge, ui
                                                                            i.partStartIndex,
                                                                            overloadNodeListD, isActiveD1,
                                                                            isActiveD2);
-                    uint itr = 0;
+                    SIZE_TYPE itr = 0;
                     bool isFinishedHost = true;
                     do {
                         itr++;

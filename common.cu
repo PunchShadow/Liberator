@@ -1,6 +1,6 @@
 #include "common.cuh"
 
-void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, uint testNumNodes, float param,
+void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, SIZE_TYPE testNumNodes, float param,
                          int edgeSize, int nodeParamsSize) {
     //caculate max memory
     int deviceID;
@@ -10,7 +10,7 @@ void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &total
     size_t totalMemory;
     size_t availMemory;
     cudaMemGetInfo(&availMemory, &totalMemory);
-    long reduceMem = nodeParamsSize * sizeof(uint) * (long) testNumNodes;
+    long reduceMem = nodeParamsSize * sizeof(SIZE_TYPE) * (long) testNumNodes;
     totalSize = (availMemory - reduceMem) / edgeSize;
     max_partition_size = param * totalSize;
     printf("total memory is %ld max memory is %ld, most edge size is %ld\n total edge size %ld \n multiprocessors %d \n",
@@ -20,13 +20,13 @@ void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &total
         printf("bigger than DIST_INFINITY\n");
         max_partition_size = DIST_INFINITY;
     }
-    uint temp = max_partition_size % fragment_size;
+    SIZE_TYPE temp = max_partition_size % fragment_size;
     max_partition_size = max_partition_size - temp;
 }
 
 
-void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, uint testNumNodes, float param,
-                         int edgeSize, uint edgeListSize, int nodeParamsSize) {
+void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, SIZE_TYPE testNumNodes, float param,
+                         int edgeSize, SIZE_TYPE edgeListSize, int nodeParamsSize) {
     int deviceID;
     cudaDeviceProp dev{};
     cudaGetDevice(&deviceID);
@@ -34,13 +34,13 @@ void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &total
     size_t totalMemory;
     size_t availMemory;
     cudaMemGetInfo(&availMemory, &totalMemory);
-    long reduceMem = nodeParamsSize * sizeof(uint) * (long) testNumNodes;
+    long reduceMem = nodeParamsSize * sizeof(SIZE_TYPE) * (long) testNumNodes;
     cout << "reduceMem " << reduceMem << " testNumNodes " << testNumNodes << " nodeParamsSize " << nodeParamsSize
          << endl;
     totalSize = (availMemory - reduceMem) / edgeSize;
 
     float adviseK = (10 - (float) edgeListSize / (float) totalSize) / 9;
-    //uint dynamicDataMax = edgeListSize * edgeSize -
+    //SIZE_TYPE dynamicDataMax = edgeListSize * edgeSize -
     /*double tempUpper = ((double) (availMemory - reduceMem) * 15 - (double)edgeListSize * edgeSize);
     double tempLower = (double) (availMemory - reduceMem) * 14;
     double adviseK = tempUpper / tempLower;*/
@@ -66,16 +66,16 @@ void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &total
         printf("bigger than DIST_INFINITY\n");
         max_partition_size = DIST_INFINITY;
     }
-    uint temp = max_partition_size % fragment_size;
+    SIZE_TYPE temp = max_partition_size % fragment_size;
     max_partition_size = max_partition_size - temp;
 }
 
 void
 checkNeedTransferPartition(bool *needTransferPartition, CommonPartitionInfo *partitionInfoList, bool *isActiveNodeList,
-                           int partitionNum, uint testNumNodes, uint &activeNum) {
-    uint tempMinNode = UINT_MAX;
-    uint tempMaxNode = 0;
-    for (uint j = 0; j < testNumNodes; j++) {
+                           int partitionNum, SIZE_TYPE testNumNodes, SIZE_TYPE &activeNum) {
+    SIZE_TYPE tempMinNode = DIST_INFINITY;
+    SIZE_TYPE tempMaxNode = 0;
+    for (SIZE_TYPE j = 0; j < testNumNodes; j++) {
         if (isActiveNodeList[j]) {
             if (j < tempMinNode) {
                 tempMinNode = j;
@@ -98,11 +98,11 @@ checkNeedTransferPartition(bool *needTransferPartition, CommonPartitionInfo *par
 }
 
 void checkNeedTransferPartitionOpt(bool *needTransferPartition, CommonPartitionInfo *partitionInfoList,
-                                   bool *isActiveNodeList, int partitionNum, uint testNumNodes, uint &activeNum) {
+                                   bool *isActiveNodeList, int partitionNum, SIZE_TYPE testNumNodes, SIZE_TYPE &activeNum) {
     for (int i = 0; i < partitionNum; i++) {
         needTransferPartition[i] = false;
     }
-    for (uint j = 0; j < testNumNodes; j++) {
+    for (SIZE_TYPE j = 0; j < testNumNodes; j++) {
         if (isActiveNodeList[j]) {
             for (int i = 0; i < partitionNum; i++) {
                 if (partitionInfoList[i].startVertex <= j && partitionInfoList[i].endVertex >= j) {
@@ -114,22 +114,22 @@ void checkNeedTransferPartitionOpt(bool *needTransferPartition, CommonPartitionI
     }
 }
 
-void caculatePartInfoForEdgeList(uint *overloadNodePointers, uint *overloadNodeList, uint *degree,
-                                 vector<PartEdgeListInfo> &partEdgeListInfoArr, uint overloadNodeNum,
-                                 uint overloadMemorySize, uint overloadEdgeNum) {
+void caculatePartInfoForEdgeList(SIZE_TYPE *overloadNodePointers, SIZE_TYPE *overloadNodeList, SIZE_TYPE *degree,
+                                 vector<PartEdgeListInfo> &partEdgeListInfoArr, SIZE_TYPE overloadNodeNum,
+                                 SIZE_TYPE overloadMemorySize, SIZE_TYPE overloadEdgeNum) {
     partEdgeListInfoArr.clear();
     if (overloadMemorySize < overloadEdgeNum) {
-        uint left = 0;
-        uint right = overloadNodeNum - 1;
+        SIZE_TYPE left = 0;
+        SIZE_TYPE right = overloadNodeNum - 1;
         while ((overloadNodePointers[right] + degree[overloadNodeList[right]] - overloadNodePointers[left]) >
                overloadMemorySize) {
-            uint start = left;
-            uint end = right;
-            uint mid;
+            SIZE_TYPE start = left;
+            SIZE_TYPE end = right;
+            SIZE_TYPE mid;
             while (start <= end) {
                 mid = (start + end) / 2;
-                uint headDistance = overloadNodePointers[mid] - overloadNodePointers[left];
-                uint tailDistance =
+                SIZE_TYPE headDistance = overloadNodePointers[mid] - overloadNodePointers[left];
+                SIZE_TYPE tailDistance =
                         overloadNodePointers[mid] + degree[overloadNodeList[mid]] - overloadNodePointers[left];
                 if (headDistance <= overloadMemorySize && tailDistance > overloadMemorySize) {
                     break;

@@ -163,7 +163,7 @@ void GraphMeta<EdgeType>::initLableAndValue() {
         valuePr = new float[vertexArrSize];
         for (uint i = 0; i < vertexArrSize; i++) {
             label[i] = 1;
-            valuePr[i] = 1.0;
+            valuePr[i] = 0.15f;
         }
     } else {
         value = new SIZE_TYPE[vertexArrSize];

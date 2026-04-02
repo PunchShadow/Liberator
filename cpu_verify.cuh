@@ -16,17 +16,17 @@ using namespace std;
 // Parallel level-synchronous BFS. Source level = 1 (matching Liberator).
 static bool cpu_verify_bfs(
     const EDGE_POINTER_TYPE *nodePointers,
-    const uint *edgeList,
+    const SIZE_TYPE *edgeList,
     SIZE_TYPE vertexArrSize,
     EDGE_POINTER_TYPE edgeArrSize,
     SIZE_TYPE sourceNode,
-    const uint *gpuResult)
+    const SIZE_TYPE *gpuResult)
 {
     cout << "\n=== CPU BFS Verification (parallel) ===" << endl;
     auto t0 = chrono::steady_clock::now();
-    const uint INF = vertexArrSize + 1;
+    const SIZE_TYPE INF = vertexArrSize + 1;
 
-    uint *dist = new uint[vertexArrSize];
+    SIZE_TYPE *dist = new SIZE_TYPE[vertexArrSize];
     #pragma omp parallel for
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) dist[i] = INF;
     dist[sourceNode] = 1;
@@ -43,11 +43,11 @@ static bool cpu_verify_bfs(
             #pragma omp for schedule(dynamic, 64)
             for (size_t fi = 0; fi < frontier.size(); fi++) {
                 SIZE_TYPE v = frontier[fi];
-                uint lv = dist[v];
+                SIZE_TYPE lv = dist[v];
                 EDGE_POINTER_TYPE s = nodePointers[v];
                 EDGE_POINTER_TYPE e = (v + 1 < vertexArrSize) ? nodePointers[v + 1] : edgeArrSize;
                 for (EDGE_POINTER_TYPE ei = s; ei < e; ei++) {
-                    uint u = edgeList[ei];
+                    SIZE_TYPE u = edgeList[ei];
                     if (u < vertexArrSize && dist[u] == INF) {
                         if (__sync_bool_compare_and_swap(&dist[u], INF, lv + 1))
                             tnext[tid].push_back(u);
@@ -63,7 +63,7 @@ static bool cpu_verify_bfs(
     auto t1 = chrono::steady_clock::now();
     cout << "  CPU time: " << chrono::duration_cast<chrono::milliseconds>(t1 - t0).count() << " ms" << endl;
 
-    uint mismatch = 0, rg = 0, rc = 0;
+    SIZE_TYPE mismatch = 0, rg = 0, rc = 0;
     #pragma omp parallel for reduction(+:mismatch, rg, rc)
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
         if (gpuResult[i] != INF) rg++;
@@ -92,19 +92,19 @@ static bool cpu_verify_bfs(
 // Sequential Union-Find with path compression. Component label = min vertex ID.
 static bool cpu_verify_cc(
     const EDGE_POINTER_TYPE *nodePointers,
-    const uint *edgeList,
+    const SIZE_TYPE *edgeList,
     SIZE_TYPE vertexArrSize,
     EDGE_POINTER_TYPE edgeArrSize,
-    const uint *gpuResult)
+    const SIZE_TYPE *gpuResult)
 {
     cout << "\n=== CPU CC Verification (Union-Find) ===" << endl;
     auto t0 = chrono::steady_clock::now();
 
-    uint *parent = new uint[vertexArrSize];
+    SIZE_TYPE *parent = new SIZE_TYPE[vertexArrSize];
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) parent[i] = i;
 
     // Iterative find with path compression
-    auto find = [&](uint v) -> uint {
+    auto find = [&](SIZE_TYPE v) -> SIZE_TYPE {
         while (parent[v] != v) {
             parent[v] = parent[parent[v]];
             v = parent[v];
@@ -116,11 +116,11 @@ static bool cpu_verify_cc(
     for (SIZE_TYPE v = 0; v < vertexArrSize; v++) {
         EDGE_POINTER_TYPE s = nodePointers[v];
         EDGE_POINTER_TYPE e = (v + 1 < vertexArrSize) ? nodePointers[v + 1] : edgeArrSize;
-        uint rv = find(v);
+        SIZE_TYPE rv = find(v);
         for (EDGE_POINTER_TYPE ei = s; ei < e; ei++) {
-            uint u = edgeList[ei];
+            SIZE_TYPE u = edgeList[ei];
             if (u < vertexArrSize) {
-                uint ru = find(u);
+                SIZE_TYPE ru = find(u);
                 if (rv != ru) {
                     if (rv < ru) parent[ru] = rv;
                     else { parent[rv] = ru; rv = ru; }
@@ -130,10 +130,10 @@ static bool cpu_verify_cc(
     }
 
     // Flatten: result[v] = root of v's component (= min vertex ID in component)
-    uint *cpuResult = new uint[vertexArrSize];
+    SIZE_TYPE *cpuResult = new SIZE_TYPE[vertexArrSize];
     #pragma omp parallel for
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
-        uint v = i;
+        SIZE_TYPE v = i;
         while (parent[v] != v) v = parent[v];
         cpuResult[i] = v;
     }
@@ -142,7 +142,7 @@ static bool cpu_verify_cc(
     cout << "  CPU time: " << chrono::duration_cast<chrono::milliseconds>(t1 - t0).count() << " ms" << endl;
 
     // Direct comparison first
-    uint directMismatch = 0;
+    SIZE_TYPE directMismatch = 0;
     #pragma omp parallel for reduction(+:directMismatch)
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++)
         if (gpuResult[i] != cpuResult[i]) directMismatch++;
@@ -156,13 +156,13 @@ static bool cpu_verify_cc(
 
     // Check structural equivalence: neighbors must share GPU labels
     cout << "  Label mismatches: " << directMismatch << " / " << vertexArrSize << endl;
-    uint structErr = 0;
+    SIZE_TYPE structErr = 0;
     SIZE_TYPE checkLimit = min((SIZE_TYPE)100000, vertexArrSize);
     for (SIZE_TYPE v = 0; v < checkLimit; v++) {
         EDGE_POINTER_TYPE s = nodePointers[v];
         EDGE_POINTER_TYPE e = (v + 1 < vertexArrSize) ? nodePointers[v + 1] : edgeArrSize;
         for (EDGE_POINTER_TYPE ei = s; ei < e; ei++) {
-            uint u = edgeList[ei];
+            SIZE_TYPE u = edgeList[ei];
             if (u < vertexArrSize && gpuResult[v] != gpuResult[u]) {
                 structErr++;
                 if (structErr <= 5)
@@ -176,13 +176,13 @@ static bool cpu_verify_cc(
     // Count distinct component labels for GPU and CPU
     {
         vector<bool> seenGpu(vertexArrSize, false), seenCpu(vertexArrSize, false);
-        uint gpuComponents = 0, cpuComponents = 0;
+        SIZE_TYPE gpuComponents = 0, cpuComponents = 0;
         for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
             if (gpuResult[i] < vertexArrSize && !seenGpu[gpuResult[i]]) { seenGpu[gpuResult[i]] = true; gpuComponents++; }
             if (cpuResult[i] < vertexArrSize && !seenCpu[cpuResult[i]]) { seenCpu[cpuResult[i]] = true; cpuComponents++; }
         }
         // Count GPU labels that are >= vertexArrSize (e.g. all set to vertexArrSize+1)
-        uint gpuOutOfRange = 0;
+        SIZE_TYPE gpuOutOfRange = 0;
         for (SIZE_TYPE i = 0; i < vertexArrSize; i++)
             if (gpuResult[i] >= vertexArrSize) gpuOutOfRange++;
         if (gpuOutOfRange > 0) gpuComponents += 1; // treat them as one "component"
@@ -223,13 +223,13 @@ static bool cpu_verify_sssp(
     SIZE_TYPE vertexArrSize,
     EDGE_POINTER_TYPE edgeArrSize,
     SIZE_TYPE sourceNode,
-    const uint *gpuResult)
+    const SIZE_TYPE *gpuResult)
 {
     cout << "\n=== CPU SSSP Verification (parallel Bellman-Ford) ===" << endl;
     auto t0 = chrono::steady_clock::now();
-    const uint INF = vertexArrSize + 1;
+    const SIZE_TYPE INF = vertexArrSize + 1;
 
-    uint *dist = new uint[vertexArrSize];
+    SIZE_TYPE *dist = new SIZE_TYPE[vertexArrSize];
     #pragma omp parallel for
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) dist[i] = INF;
     dist[sourceNode] = 1;
@@ -247,18 +247,18 @@ static bool cpu_verify_sssp(
         #pragma omp parallel for schedule(dynamic, 64)
         for (size_t fi = 0; fi < frontier.size(); fi++) {
             SIZE_TYPE v = frontier[fi];
-            uint vDist = dist[v];
+            SIZE_TYPE vDist = dist[v];
             EDGE_POINTER_TYPE s = nodePointers[v];
             EDGE_POINTER_TYPE e = (v + 1 < vertexArrSize) ? nodePointers[v + 1] : edgeArrSize;
             for (EDGE_POINTER_TYPE ei = s; ei < e; ei++) {
-                uint u = edgeList[ei].toNode;
-                uint w = edgeList[ei].weight;
+                SIZE_TYPE u = edgeList[ei].toNode;
+                SIZE_TYPE w = edgeList[ei].weight;
                 if (u < vertexArrSize) {
-                    uint newDist = vDist + w;
+                    SIZE_TYPE newDist = vDist + w;
                     // Atomic min using CAS
-                    uint old = dist[u];
+                    SIZE_TYPE old = dist[u];
                     while (newDist < old) {
-                        uint prev = __sync_val_compare_and_swap(&dist[u], old, newDist);
+                        SIZE_TYPE prev = __sync_val_compare_and_swap(&dist[u], old, newDist);
                         if (prev == old) {
                             inNextFrontier[u] = true;
                             break;
@@ -279,7 +279,7 @@ static bool cpu_verify_sssp(
     cout << "  CPU time: " << chrono::duration_cast<chrono::milliseconds>(t1 - t0).count()
          << " ms, iterations: " << iter << endl;
 
-    uint mismatch = 0, rg = 0, rc = 0;
+    SIZE_TYPE mismatch = 0, rg = 0, rc = 0;
     #pragma omp parallel for reduction(+:mismatch, rg, rc)
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
         if (gpuResult[i] != INF) rg++;
@@ -310,11 +310,11 @@ static bool cpu_verify_sssp(
 // Convergence threshold: 0.001 (matching prKernel_Opt).
 static bool cpu_verify_pr(
     const EDGE_POINTER_TYPE *nodePointers,  // CSC: incoming edge pointers
-    const uint *edgeList,                    // source vertices of incoming edges
+    const SIZE_TYPE *edgeList,               // source vertices of incoming edges
     const SIZE_TYPE *outDegree,
     SIZE_TYPE vertexArrSize,
     EDGE_POINTER_TYPE edgeArrSize,
-    const double *gpuResult)
+    const float *gpuResult)
 {
     cout << "\n=== CPU PageRank Verification (parallel) ===" << endl;
     auto t0 = chrono::steady_clock::now();
@@ -324,12 +324,12 @@ static bool cpu_verify_pr(
 
     #pragma omp parallel for
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
-        value[i] = 1.0 / vertexArrSize;
+        value[i] = 0.15;
         sumArr[i] = 0.0;
     }
 
     int iter = 0;
-    uint activeCount = vertexArrSize;
+    SIZE_TYPE activeCount = vertexArrSize;
 
     while (activeCount > 0) {
         iter++;
@@ -341,7 +341,7 @@ static bool cpu_verify_pr(
             EDGE_POINTER_TYPE e = (v + 1 < vertexArrSize) ? nodePointers[v + 1] : edgeArrSize;
             double tempSum = 0.0;
             for (EDGE_POINTER_TYPE ei = s; ei < e; ei++) {
-                uint src = edgeList[ei];
+                SIZE_TYPE src = edgeList[ei];
                 if (src < vertexArrSize && outDegree[src] != 0) {
                     tempSum += value[src] / (double)outDegree[src];
                 }
@@ -355,7 +355,7 @@ static bool cpu_verify_pr(
         for (SIZE_TYPE v = 0; v < vertexArrSize; v++) {
             double newVal = 0.15 + 0.85 * sumArr[v];
             double diff = fabs(newVal - value[v]);
-            if (diff > 0.001) activeCount++;
+            if (diff > 0.01) activeCount++;
             value[v] = newVal;
         }
     }
@@ -365,7 +365,7 @@ static bool cpu_verify_pr(
          << " ms, iterations: " << iter << endl;
 
     // Compare with tolerance
-    uint mismatch = 0;
+    SIZE_TYPE mismatch = 0;
     double maxDiff = 0.0;
     #pragma omp parallel for reduction(+:mismatch) reduction(max:maxDiff)
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {

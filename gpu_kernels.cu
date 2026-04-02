@@ -42,8 +42,8 @@ __device__ void gpu_sync(int goalVal, volatile int *g_mutex) {
 }
 
 __global__ void
-setLabeling(uint vertexNum, bool *labelD, uint *labelingD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setLabeling(SIZE_TYPE vertexNum, bool *labelD, SIZE_TYPE *labelingD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (labelD[vertexId]) {
             labelingD[vertexId] = 1;
             //printf("vertex[%d] set 1\n", vertexId);
@@ -54,9 +54,9 @@ setLabeling(uint vertexNum, bool *labelD, uint *labelingD) {
 }
 
 __global__ void
-setActiveNodeArrayAndNodePointerOpt(uint vertexNum, uint *activeNodes, uint *activeNodePointers, uint *activeLabel,
-                                    uint *activeLabelPrefix, uint overloadVertex, uint *degreeD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setActiveNodeArrayAndNodePointerOpt(SIZE_TYPE vertexNum, SIZE_TYPE *activeNodes, SIZE_TYPE *activeNodePointers, SIZE_TYPE *activeLabel,
+                                    SIZE_TYPE *activeLabelPrefix, SIZE_TYPE overloadVertex, SIZE_TYPE *degreeD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             activeNodes[activeLabelPrefix[vertexId]] = vertexId;
             if (vertexId > overloadVertex) {
@@ -71,9 +71,9 @@ setActiveNodeArrayAndNodePointerOpt(uint vertexNum, uint *activeNodes, uint *act
 }
 
 __global__ void
-setActiveNodeArrayAndNodePointerSwap(uint vertexNum, uint *activeNodes, uint *activeLabel,
-                                     uint *activeLabelPrefix, bool *isInD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setActiveNodeArrayAndNodePointerSwap(SIZE_TYPE vertexNum, SIZE_TYPE *activeNodes, SIZE_TYPE *activeLabel,
+                                     SIZE_TYPE *activeLabelPrefix, bool *isInD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             activeNodes[activeLabelPrefix[vertexId]] = vertexId;
             if (!isInD[vertexId]) {
@@ -86,9 +86,9 @@ setActiveNodeArrayAndNodePointerSwap(uint vertexNum, uint *activeNodes, uint *ac
 }
 
 __global__ void
-setOverloadActiveNodeArray(uint vertexNum, uint *activeNodes, uint *overloadLabel,
-                           uint *activeLabelPrefix) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setOverloadActiveNodeArray(SIZE_TYPE vertexNum, SIZE_TYPE *activeNodes, SIZE_TYPE *overloadLabel,
+                           SIZE_TYPE *activeLabelPrefix) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (overloadLabel[vertexId]) {
             activeNodes[activeLabelPrefix[vertexId]] = vertexId;
         }
@@ -96,8 +96,8 @@ setOverloadActiveNodeArray(uint vertexNum, uint *activeNodes, uint *overloadLabe
 }
 
 __global__ void
-setStaticAndOverloadLabel(uint vertexNum, uint *activeLabel, uint *staticLabel, uint *overloadLabel, bool *isInD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setStaticAndOverloadLabel(SIZE_TYPE vertexNum, SIZE_TYPE *activeLabel, SIZE_TYPE *staticLabel, SIZE_TYPE *overloadLabel, bool *isInD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             if (isInD[vertexId]) {
                 staticLabel[vertexId] = 1;
@@ -109,8 +109,8 @@ setStaticAndOverloadLabel(uint vertexNum, uint *activeLabel, uint *staticLabel, 
 }
 
 __global__ void
-setStaticAndOverloadLabelBool(uint vertexNum, bool *activeLabel, bool *staticLabel, bool *overloadLabel, bool *isInD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setStaticAndOverloadLabelBool(SIZE_TYPE vertexNum, bool *activeLabel, bool *staticLabel, bool *overloadLabel, bool *isInD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             if (isInD[vertexId]) {
                 staticLabel[vertexId] = 1;
@@ -122,9 +122,9 @@ setStaticAndOverloadLabelBool(uint vertexNum, bool *activeLabel, bool *staticLab
 }
 
 __global__ void
-setStaticAndOverloadLabelAndRecord(uint vertexNum, uint *activeLabel, uint *staticLabel, uint *overloadLabel,
-                                   bool *isInD, uint *vertexVisitRecordD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setStaticAndOverloadLabelAndRecord(SIZE_TYPE vertexNum, SIZE_TYPE *activeLabel, SIZE_TYPE *staticLabel, SIZE_TYPE *overloadLabel,
+                                   bool *isInD, SIZE_TYPE *vertexVisitRecordD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             if (isInD[vertexId]) {
                 staticLabel[vertexId] = 1;
@@ -137,10 +137,10 @@ setStaticAndOverloadLabelAndRecord(uint vertexNum, uint *activeLabel, uint *stat
 }
 
 __global__ void
-setStaticAndOverloadLabel4Pr(uint vertexNum, uint *activeLabel, uint *staticLabel, uint *overloadLabel, bool *isInD,
-                             uint *fragmentRecordD, uint *nodePointersD, uint fragment_size, uint *degreeD,
+setStaticAndOverloadLabel4Pr(SIZE_TYPE vertexNum, SIZE_TYPE *activeLabel, SIZE_TYPE *staticLabel, SIZE_TYPE *overloadLabel, bool *isInD,
+                             SIZE_TYPE *fragmentRecordD, SIZE_TYPE *nodePointersD, SIZE_TYPE fragment_size, SIZE_TYPE *degreeD,
                              bool *isFragmentActiveD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             if (isInD[vertexId]) {
                 staticLabel[vertexId] = 1;
@@ -148,9 +148,9 @@ setStaticAndOverloadLabel4Pr(uint vertexNum, uint *activeLabel, uint *staticLabe
                 overloadLabel[vertexId] = 1;
             }
         } else {
-            uint edgeIndex = nodePointersD[vertexId];
-            uint fragmentIndex = edgeIndex / fragment_size;
-            uint fragmentMoreIndex = (edgeIndex + degreeD[vertexId]) / fragment_size;
+            SIZE_TYPE edgeIndex = nodePointersD[vertexId];
+            SIZE_TYPE fragmentIndex = edgeIndex / fragment_size;
+            SIZE_TYPE fragmentMoreIndex = (edgeIndex + degreeD[vertexId]) / fragment_size;
             if (isFragmentActiveD[fragmentIndex]) {
                 if (fragmentMoreIndex > fragmentIndex) {
                     atomicAdd(&fragmentRecordD[fragmentIndex],
@@ -164,18 +164,18 @@ setStaticAndOverloadLabel4Pr(uint vertexNum, uint *activeLabel, uint *staticLabe
 }
 
 __global__ void
-cleanStaticAndOverloadLabel(uint vertexNum, uint *staticLabel, uint *overloadLabel) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+cleanStaticAndOverloadLabel(SIZE_TYPE vertexNum, SIZE_TYPE *staticLabel, SIZE_TYPE *overloadLabel) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         staticLabel[vertexId] = 0;
         overloadLabel[vertexId] = 0;
     });
 }
 
 __global__ void
-setStaticAndOverloadNodePointer(uint vertexNum, uint *staticNodes, uint *overloadNodes, uint *overloadNodeDegrees,
-                                uint *staticLabel, uint *overloadLabel,
-                                uint *staticPrefix, uint *overloadPrefix, uint *degreeD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setStaticAndOverloadNodePointer(SIZE_TYPE vertexNum, SIZE_TYPE *staticNodes, SIZE_TYPE *overloadNodes, SIZE_TYPE *overloadNodeDegrees,
+                                SIZE_TYPE *staticLabel, SIZE_TYPE *overloadLabel,
+                                SIZE_TYPE *staticPrefix, SIZE_TYPE *overloadPrefix, SIZE_TYPE *degreeD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (overloadLabel[vertexId]) {
             overloadNodes[overloadPrefix[vertexId]] = vertexId;
             overloadNodeDegrees[overloadPrefix[vertexId]] = degreeD[vertexId];
@@ -189,9 +189,9 @@ setStaticAndOverloadNodePointer(uint vertexNum, uint *staticNodes, uint *overloa
 }
 
 __global__ void
-setActiveNodeArray(uint vertexNum, uint *activeNodes, bool *activeLabel,
-                   uint *activeLabelPrefix) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setActiveNodeArray(SIZE_TYPE vertexNum, SIZE_TYPE *activeNodes, bool *activeLabel,
+                   SIZE_TYPE *activeLabelPrefix) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             //printf("activeNodes %d set %d %d \n", activeLabelPrefix[vertexId], vertexId, activeLabel[vertexId]);
             activeNodes[activeLabelPrefix[vertexId]] = vertexId;
@@ -200,9 +200,9 @@ setActiveNodeArray(uint vertexNum, uint *activeNodes, bool *activeLabel,
 }
 
 __global__ void
-setActiveNodeArrayAndNodePointer(uint vertexNum, uint *activeNodes, uint *activeNodePointers, bool *activeLabel,
-                                 uint *activeLabelPrefix, uint overloadVertex, uint *degreeD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setActiveNodeArrayAndNodePointer(SIZE_TYPE vertexNum, SIZE_TYPE *activeNodes, SIZE_TYPE *activeNodePointers, bool *activeLabel,
+                                 SIZE_TYPE *activeLabelPrefix, SIZE_TYPE overloadVertex, SIZE_TYPE *degreeD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             activeNodes[activeLabelPrefix[vertexId]] = vertexId;
             if (vertexId > overloadVertex) {
@@ -215,9 +215,9 @@ setActiveNodeArrayAndNodePointer(uint vertexNum, uint *activeNodes, uint *active
 }
 
 __global__ void
-setActiveNodeArrayAndNodePointerBySortOpt(uint vertexNum, uint *activeNodes, uint *activeOverloadDegree,
-                                          bool *activeLabel, uint *activeLabelPrefix, bool *isInList, uint *degreeD) {
-    streamVertices(vertexNum, [&](uint vertexId) {
+setActiveNodeArrayAndNodePointerBySortOpt(SIZE_TYPE vertexNum, SIZE_TYPE *activeNodes, SIZE_TYPE *activeOverloadDegree,
+                                          bool *activeLabel, SIZE_TYPE *activeLabelPrefix, bool *isInList, SIZE_TYPE *degreeD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE vertexId) {
         if (activeLabel[vertexId]) {
             activeNodes[activeLabelPrefix[vertexId]] = vertexId;
             if (!isInList[vertexId]) {
@@ -230,8 +230,8 @@ setActiveNodeArrayAndNodePointerBySortOpt(uint vertexNum, uint *activeNodes, uin
 }
 
 __global__ void
-setLabelDefault(uint activeNum, uint *activeNodes, bool *labelD) {
-    streamVertices(activeNum, [&](uint vertexId) {
+setLabelDefault(SIZE_TYPE activeNum, SIZE_TYPE *activeNodes, bool *labelD) {
+    streamVertices(activeNum, [&](SIZE_TYPE vertexId) {
         if (labelD[activeNodes[vertexId]]) {
             labelD[activeNodes[vertexId]] = 0;
             //printf("vertex%d index %d true to %d \n", vertexId, activeNodes[vertexId], labelD[activeNodes[vertexId]]);
@@ -240,9 +240,9 @@ setLabelDefault(uint activeNum, uint *activeNodes, bool *labelD) {
 }
 
 __global__ void
-mixStaticLabel(uint activeNum, uint *activeNodes, uint *labelD1, uint *labelD2, bool *isInD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint vertexId = activeNodes[index];
+mixStaticLabel(SIZE_TYPE activeNum, SIZE_TYPE *activeNodes, SIZE_TYPE *labelD1, SIZE_TYPE *labelD2, bool *isInD) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE vertexId = activeNodes[index];
         if (labelD1[vertexId]) {
             labelD1[vertexId] = 0;
         }
@@ -254,42 +254,42 @@ mixStaticLabel(uint activeNum, uint *activeNodes, uint *labelD1, uint *labelD2, 
 }
 
 __global__ void
-mixDynamicPartLabel(uint overloadPartNodeNum, uint startIndex, const uint *overloadNodes, uint *labelD1,
-                    uint *labelD2) {
-    streamVertices(overloadPartNodeNum, [&](uint index) {
-        uint vertexId = overloadNodes[startIndex + index];
+mixDynamicPartLabel(SIZE_TYPE overloadPartNodeNum, SIZE_TYPE startIndex, const SIZE_TYPE *overloadNodes, SIZE_TYPE *labelD1,
+                    SIZE_TYPE *labelD2) {
+    streamVertices(overloadPartNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE vertexId = overloadNodes[startIndex + index];
         labelD1[vertexId] = labelD1[vertexId] || labelD2[vertexId];
         labelD2[vertexId] = 0;
     });
 }
 
 __global__ void
-mixCommonLabel(uint testNodeNum, uint *labelD1, uint *labelD2) {
-    streamVertices(testNodeNum, [&](uint vertexId) {
+mixCommonLabel(SIZE_TYPE testNodeNum, SIZE_TYPE *labelD1, SIZE_TYPE *labelD2) {
+    streamVertices(testNodeNum, [&](SIZE_TYPE vertexId) {
         labelD1[vertexId] = labelD1[vertexId] || labelD2[vertexId];
         labelD2[vertexId] = 0;
     });
 }
 
 __global__ void
-setDynamicPartLabelTrue(uint overloadPartNodeNum, uint startIndex, const uint *overloadNodes, uint *labelD1,
-                        uint *labelD2) {
-    streamVertices(overloadPartNodeNum, [&](uint index) {
-        uint vertexId = overloadNodes[startIndex + index];
+setDynamicPartLabelTrue(SIZE_TYPE overloadPartNodeNum, SIZE_TYPE startIndex, const SIZE_TYPE *overloadNodes, SIZE_TYPE *labelD1,
+                        SIZE_TYPE *labelD2) {
+    streamVertices(overloadPartNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE vertexId = overloadNodes[startIndex + index];
         labelD1[vertexId] = true;
         labelD2[vertexId] = false;
     });
 }
 
 __global__ void
-bfs_kernel(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD, uint *valueD,
+bfs_kernel(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD, SIZE_TYPE *valueD,
            bool *labelD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint edgeIndex = nodePointersD[id];
-        uint sourceValue = valueD[id];
-        uint finalValue;
-        for (uint i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE edgeIndex = nodePointersD[id];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
+        for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
             finalValue = sourceValue + 1;
             if (finalValue < valueD[edgeListD[i]]) {
                 atomicMin(&valueD[edgeListD[i]], finalValue);
@@ -300,17 +300,17 @@ bfs_kernel(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degree
 }
 
 __global__ void
-bfsKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const bool *isActiveNodeListD,
-                          const uint *nodePointersD,
-                          const uint *edgeListD, const uint *degreeD, uint *valueD, bool *nextActiveNodeListD) {
-    streamVertices(endVertex - startVertex + 1, [&](uint index) {
-        uint nodeIndex = startVertex + index;
+bfsKernel_CommonPartition(SIZE_TYPE startVertex, SIZE_TYPE endVertex, SIZE_TYPE offset, const bool *isActiveNodeListD,
+                          const SIZE_TYPE *nodePointersD,
+                          const SIZE_TYPE *edgeListD, const SIZE_TYPE *degreeD, SIZE_TYPE *valueD, bool *nextActiveNodeListD) {
+    streamVertices(endVertex - startVertex + 1, [&](SIZE_TYPE index) {
+        SIZE_TYPE nodeIndex = startVertex + index;
         if (isActiveNodeListD[nodeIndex]) {
-            uint edgeIndex = nodePointersD[nodeIndex] - offset;
-            uint sourceValue = valueD[nodeIndex];
-            uint finalValue;
+            SIZE_TYPE edgeIndex = nodePointersD[nodeIndex] - offset;
+            SIZE_TYPE sourceValue = valueD[nodeIndex];
+            SIZE_TYPE finalValue;
             //printf("node %d edgeIndex %d sourceValue %d degreeD[nodeIndex] %d\n", nodeIndex, edgeIndex, sourceValue, degreeD[nodeIndex]);
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
 
                 //printf("node %d dest node %d set true \n", nodeIndex, edgeListD[i]);
                 finalValue = sourceValue + 1;
@@ -324,19 +324,21 @@ bfsKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const b
 }
 
 __global__ void
-prSumKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const bool *isActiveNodeListD,
-                            const uint *nodePointersD,
-                            const uint *edgeListD, const uint *degreeD, const uint *outDegreeD, const float *valueD,
+prSumKernel_CommonPartition(SIZE_TYPE startVertex, SIZE_TYPE endVertex, SIZE_TYPE offset, const bool *isActiveNodeListD,
+                            const SIZE_TYPE *nodePointersD,
+                            const SIZE_TYPE *edgeListD, const SIZE_TYPE *degreeD, const SIZE_TYPE *outDegreeD, const float *valueD,
                             float *sumD) {
-    streamVertices(endVertex - startVertex + 1, [&](uint index) {
-        uint nodeIndex = startVertex + index;
+    streamVertices(endVertex - startVertex + 1, [&](SIZE_TYPE index) {
+        SIZE_TYPE nodeIndex = startVertex + index;
         if (isActiveNodeListD[nodeIndex]) {
-            uint edgeIndex = nodePointersD[nodeIndex] - offset;
+            SIZE_TYPE edgeIndex = nodePointersD[nodeIndex] - offset;
             float tempSum = 0;
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
-                uint srcNodeIndex = edgeListD[i];
-                float tempValue = valueD[srcNodeIndex] / outDegreeD[srcNodeIndex];
-                tempSum += tempValue;
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
+                SIZE_TYPE srcNodeIndex = edgeListD[i];
+                if (outDegreeD[srcNodeIndex] != 0) {
+                    float tempValue = valueD[srcNodeIndex] / outDegreeD[srcNodeIndex];
+                    tempSum += tempValue;
+                }
             }
             sumD[nodeIndex] = tempSum;
         }
@@ -344,15 +346,15 @@ prSumKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const
 }
 
 __global__ void
-prKernel_CommonPartition(uint nodeNum, float *valueD, float *sumD, bool *isActiveNodeList) {
-    streamVertices(nodeNum, [&](uint index) {
+prKernel_CommonPartition(SIZE_TYPE nodeNum, float *valueD, float *sumD, bool *isActiveNodeList) {
+    streamVertices(nodeNum, [&](SIZE_TYPE index) {
         if (isActiveNodeList[index]) {
             float tempValue = 0.15 + 0.85 * sumD[index];
             float diff = tempValue > valueD[index] ? (tempValue - valueD[index]) : (valueD[index] - tempValue);
             /*if (index == 1) {
                 printf("tempValue %f \n", tempValue);
             }*/
-            if (diff > 0.001) {
+            if (diff > 0.01) {
                 isActiveNodeList[index] = true;
                 valueD[index] = tempValue;
                 sumD[index] = 0;
@@ -367,15 +369,15 @@ prKernel_CommonPartition(uint nodeNum, float *valueD, float *sumD, bool *isActiv
 
 
 __global__ void
-prSumKernel_UVM(uint vertexNum, const int *isActiveNodeListD, const uint *nodePointersD,
-                const uint *edgeListD, const uint *degreeD, const float *valueD, float *sumD) {
-    streamVertices(vertexNum, [&](uint index) {
-        uint nodeIndex = index;
+prSumKernel_UVM(SIZE_TYPE vertexNum, const int *isActiveNodeListD, const SIZE_TYPE *nodePointersD,
+                const SIZE_TYPE *edgeListD, const SIZE_TYPE *degreeD, const float *valueD, float *sumD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE nodeIndex = index;
         if (isActiveNodeListD[nodeIndex] > 0) {
-            uint edgeIndex = nodePointersD[nodeIndex];
-            float sourceValue = valueD[nodeIndex] / degreeD[nodeIndex];
+            SIZE_TYPE edgeIndex = nodePointersD[nodeIndex];
+            float sourceValue = (degreeD[nodeIndex] != 0) ? valueD[nodeIndex] / degreeD[nodeIndex] : 0.0f;
             //printf("node %d edgeIndex %d sourceValue %d degreeD[nodeIndex] %d\n", nodeIndex, edgeIndex, sourceValue, degreeD[nodeIndex]);
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
 
                 //printf("node %d dest node %d set true \n", nodeIndex, edgeListD[i]);
                 atomicAdd(&sumD[edgeListD[i]], sourceValue);
@@ -385,23 +387,25 @@ prSumKernel_UVM(uint vertexNum, const int *isActiveNodeListD, const uint *nodePo
 }
 
 __global__ void
-prSumKernel_UVM_Out(uint vertexNum, int *isActiveNodeListD, const uint *nodePointersD,
-                    const uint *edgeListD, const uint *degreeD, const uint *outDegreeD, float *valueD) {
-    streamVertices(vertexNum, [&](uint index) {
-        uint nodeIndex = index;
+prSumKernel_UVM_Out(SIZE_TYPE vertexNum, int *isActiveNodeListD, const SIZE_TYPE *nodePointersD,
+                    const SIZE_TYPE *edgeListD, const SIZE_TYPE *degreeD, const SIZE_TYPE *outDegreeD, float *valueD) {
+    streamVertices(vertexNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE nodeIndex = index;
         if (isActiveNodeListD[nodeIndex] > 0) {
-            uint edgeIndex = nodePointersD[nodeIndex];
+            SIZE_TYPE edgeIndex = nodePointersD[nodeIndex];
             float tempSum = 0;
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
-                uint srcNodeIndex = edgeListD[i];
-                float tempValue = valueD[srcNodeIndex] / outDegreeD[srcNodeIndex];
-                tempSum += tempValue;
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
+                SIZE_TYPE srcNodeIndex = edgeListD[i];
+                if (outDegreeD[srcNodeIndex] != 0) {
+                    float tempValue = valueD[srcNodeIndex] / outDegreeD[srcNodeIndex];
+                    tempSum += tempValue;
+                }
             }
 
             float tempValue = 0.15 + 0.85 * tempSum;
             float diff =
                     tempValue > valueD[nodeIndex] ? (tempValue - valueD[nodeIndex]) : (valueD[nodeIndex] - tempValue);
-            if (diff > 0.0001) {
+            if (diff > 0.01) {
                 isActiveNodeListD[nodeIndex] = 1;
                 valueD[index] = tempValue;
                 //sumD[index] = 0;
@@ -419,11 +423,11 @@ prSumKernel_UVM_Out(uint vertexNum, int *isActiveNodeListD, const uint *nodePoin
 }
 
 __global__ void
-prKernel_UVM(uint nodeNum, float *valueD, float *sumD, int *isActiveListD) {
-    streamVertices(nodeNum, [&](uint index) {
+prKernel_UVM(SIZE_TYPE nodeNum, float *valueD, float *sumD, int *isActiveListD) {
+    streamVertices(nodeNum, [&](SIZE_TYPE index) {
         float tempValue = 0.15 + 0.85 * sumD[index];
         float diff = tempValue > valueD[index] ? (tempValue - valueD[index]) : (valueD[index] - tempValue);
-        if (diff > 0.001) {
+        if (diff > 0.01) {
             isActiveListD[index] = 1;
             valueD[index] = tempValue;
             sumD[index] = 0;
@@ -440,11 +444,11 @@ prKernel_UVM(uint nodeNum, float *valueD, float *sumD, int *isActiveListD) {
 }
 
 __global__ void
-prKernel_UVM_outDegree(uint nodeNum, float *valueD, float *sumD, int *isActiveListD) {
-    streamVertices(nodeNum, [&](uint index) {
+prKernel_UVM_outDegree(SIZE_TYPE nodeNum, float *valueD, float *sumD, int *isActiveListD) {
+    streamVertices(nodeNum, [&](SIZE_TYPE index) {
         float tempValue = 0.15 + 0.85 * sumD[index];
         float diff = tempValue > valueD[index] ? (tempValue - valueD[index]) : (valueD[index] - tempValue);
-        if (diff > 0.001) {
+        if (diff > 0.01) {
             isActiveListD[index] = 1;
             valueD[index] = tempValue;
             sumD[index] = 0;
@@ -461,14 +465,14 @@ prKernel_UVM_outDegree(uint nodeNum, float *valueD, float *sumD, int *isActiveLi
 }
 
 __global__ void
-cc_kernel(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD, uint *valueD,
+cc_kernel(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD, SIZE_TYPE *valueD,
           bool *labelD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint edgeIndex = nodePointersD[id];
-        uint sourceValue = valueD[id];
-        for (uint i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
-            uint destValue = valueD[edgeListD[i]];
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE edgeIndex = nodePointersD[id];
+        SIZE_TYPE sourceValue = valueD[id];
+        for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
+            SIZE_TYPE destValue = valueD[edgeListD[i]];
             if (sourceValue < destValue) {
                 atomicMin(&valueD[edgeListD[i]], sourceValue);
                 labelD[edgeListD[i]] = true;
@@ -481,16 +485,16 @@ cc_kernel(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD
 }
 
 __global__ void
-ccKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const bool *isActiveNodeListD,
-                         const uint *nodePointersD,
-                         const uint *edgeListD, const uint *degreeD, uint *valueD, bool *nextActiveNodeListD) {
-    streamVertices(endVertex - startVertex + 1, [&](uint index) {
-        uint nodeIndex = startVertex + index;
+ccKernel_CommonPartition(SIZE_TYPE startVertex, SIZE_TYPE endVertex, SIZE_TYPE offset, const bool *isActiveNodeListD,
+                         const SIZE_TYPE *nodePointersD,
+                         const SIZE_TYPE *edgeListD, const SIZE_TYPE *degreeD, SIZE_TYPE *valueD, bool *nextActiveNodeListD) {
+    streamVertices(endVertex - startVertex + 1, [&](SIZE_TYPE index) {
+        SIZE_TYPE nodeIndex = startVertex + index;
         if (isActiveNodeListD[nodeIndex]) {
-            uint edgeIndex = nodePointersD[nodeIndex] - offset;
-            uint sourceValue = valueD[nodeIndex];
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
-                uint destValue = valueD[edgeListD[i]];
+            SIZE_TYPE edgeIndex = nodePointersD[nodeIndex] - offset;
+            SIZE_TYPE sourceValue = valueD[nodeIndex];
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
+                SIZE_TYPE destValue = valueD[edgeListD[i]];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[edgeListD[i]], sourceValue);
                     nextActiveNodeListD[edgeListD[i]] = true;
@@ -504,19 +508,19 @@ ccKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const bo
 }
 
 __global__ void
-ssspKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const bool *isActiveNodeListD,
-                           const uint *nodePointersD,
-                           const EdgeWithWeight *edgeListD, const uint *degreeD, uint *valueD,
+ssspKernel_CommonPartition(SIZE_TYPE startVertex, SIZE_TYPE endVertex, SIZE_TYPE offset, const bool *isActiveNodeListD,
+                           const SIZE_TYPE *nodePointersD,
+                           const EdgeWithWeight *edgeListD, const SIZE_TYPE *degreeD, SIZE_TYPE *valueD,
                            bool *nextActiveNodeListD) {
-    streamVertices(endVertex - startVertex + 1, [&](uint index) {
-        uint nodeIndex = startVertex + index;
+    streamVertices(endVertex - startVertex + 1, [&](SIZE_TYPE index) {
+        SIZE_TYPE nodeIndex = startVertex + index;
         if (isActiveNodeListD[nodeIndex]) {
-            uint edgeIndex = nodePointersD[nodeIndex] - offset;
-            uint sourceValue = valueD[nodeIndex];
-            uint finalValue;
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
+            SIZE_TYPE edgeIndex = nodePointersD[nodeIndex] - offset;
+            SIZE_TYPE sourceValue = valueD[nodeIndex];
+            SIZE_TYPE finalValue;
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
                 finalValue = sourceValue + edgeListD[i].weight;
-                uint vertexId = edgeListD[i].toNode;
+                SIZE_TYPE vertexId = edgeListD[i].toNode;
                 if (finalValue < valueD[vertexId]) {
                     atomicMin(&valueD[vertexId], finalValue);
                     nextActiveNodeListD[vertexId] = true;
@@ -527,15 +531,15 @@ ssspKernel_CommonPartition(uint startVertex, uint endVertex, uint offset, const 
 }
 
 __global__ void
-bfs_kernelShareOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD,
-                   uint *edgeListShare, uint *valueD, bool *labelD, uint overloadNode) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
+bfs_kernelShareOpt(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD,
+                   SIZE_TYPE *edgeListShare, SIZE_TYPE *valueD, bool *labelD, SIZE_TYPE overloadNode) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
         if (id >= overloadNode) {
-            uint edgeIndex = nodePointersD[id];
-            uint sourceValue = valueD[id];
-            uint finalValue;
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
+            SIZE_TYPE edgeIndex = nodePointersD[id];
+            SIZE_TYPE sourceValue = valueD[id];
+            SIZE_TYPE finalValue;
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
                 finalValue = sourceValue + 1;
                 if (finalValue < valueD[edgeListShare[i]]) {
                     atomicMin(&valueD[edgeListShare[i]], finalValue);
@@ -544,10 +548,10 @@ bfs_kernelShareOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint
                 }
             }
         } else {
-            uint edgeIndex = nodePointersD[id];
-            uint sourceValue = valueD[id];
-            uint finalValue;
-            for (uint i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
+            SIZE_TYPE edgeIndex = nodePointersD[id];
+            SIZE_TYPE sourceValue = valueD[id];
+            SIZE_TYPE finalValue;
+            for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
                 finalValue = sourceValue + 1;
                 if (finalValue < valueD[edgeListD[i]]) {
                     atomicMin(&valueD[edgeListD[i]], finalValue);
@@ -562,19 +566,19 @@ bfs_kernelShareOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint
 }
 
 __global__ void
-bfs_kernelStatic2Label(uint nodeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD,
-                       uint *valueD,
-                       uint *isActiveD1, uint *isActiveD2) {
-    streamVertices(nodeNum, [&](uint index) {
-        uint id = activeNodesD[index];
+bfs_kernelStatic2Label(SIZE_TYPE nodeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD,
+                       SIZE_TYPE *valueD,
+                       SIZE_TYPE *isActiveD1, SIZE_TYPE *isActiveD2) {
+    streamVertices(nodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
         if (isActiveD1[id]) {
             isActiveD1[id] = 0;
-            uint edgeIndex = nodePointersD[id];
-            uint sourceValue = valueD[id];
-            uint finalValue;
-            for (uint i = 0; i < degreeD[id]; i++) {
+            SIZE_TYPE edgeIndex = nodePointersD[id];
+            SIZE_TYPE sourceValue = valueD[id];
+            SIZE_TYPE finalValue;
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 finalValue = sourceValue + 1;
-                uint vertexId;
+                SIZE_TYPE vertexId;
                 vertexId = edgeListD[edgeIndex + i];
                 if (finalValue < valueD[vertexId]) {
                     atomicMin(&valueD[vertexId], finalValue);
@@ -587,20 +591,20 @@ bfs_kernelStatic2Label(uint nodeNum, uint *activeNodesD, uint *nodePointersD, ui
 
 
 __global__ void
-bfs_kernelDynamic2Label(uint overloadStartNode, uint overloadNodeNum, const uint *overloadNodeListD,
-                        const uint *degreeD,
-                        uint *valueD,
-                        uint *isActiveD1, uint *isActiveD2, const uint *edgeListOverloadD,
-                        const uint *activeOverloadNodePointersD) {
-    streamVertices(overloadNodeNum, [&](uint index) {
-        uint traverseIndex = overloadStartNode + index;
-        uint id = overloadNodeListD[traverseIndex];
-        uint sourceValue = valueD[id];
-        uint finalValue = sourceValue + 1;
+bfs_kernelDynamic2Label(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNum, const SIZE_TYPE *overloadNodeListD,
+                        const SIZE_TYPE *degreeD,
+                        SIZE_TYPE *valueD,
+                        SIZE_TYPE *isActiveD1, SIZE_TYPE *isActiveD2, const SIZE_TYPE *edgeListOverloadD,
+                        const SIZE_TYPE *activeOverloadNodePointersD) {
+    streamVertices(overloadNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE traverseIndex = overloadStartNode + index;
+        SIZE_TYPE id = overloadNodeListD[traverseIndex];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue = sourceValue + 1;
         if (isActiveD1[id]) {
             isActiveD1[id] = 0;
-            for (uint i = 0; i < degreeD[id]; i++) {
-                uint vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
+                SIZE_TYPE vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                                   activeOverloadNodePointersD[overloadStartNode] + i];
                 if (finalValue < valueD[vertexId]) {
                     //printf("source node %d dest node %d set true\n", id, vertexId);
@@ -614,24 +618,24 @@ bfs_kernelDynamic2Label(uint overloadStartNode, uint overloadNodeNum, const uint
 
 
 __global__ void
-sssp_kernelDynamicSwap2Label(uint overloadStartNode, uint overloadNodeNum, const uint *overloadNodeListD,
-                             const uint *degreeD,
-                             uint *valueD,
-                             uint *isActiveD1, uint *isActiveD2, const EdgeWithWeight *edgeListOverloadD,
-                             const uint *activeOverloadNodePointersD, bool *finished) {
-    streamVertices(overloadNodeNum, [&](uint index) {
-        uint traverseIndex = overloadStartNode + index;
-        uint id = overloadNodeListD[traverseIndex];
+sssp_kernelDynamicSwap2Label(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNum, const SIZE_TYPE *overloadNodeListD,
+                             const SIZE_TYPE *degreeD,
+                             SIZE_TYPE *valueD,
+                             SIZE_TYPE *isActiveD1, SIZE_TYPE *isActiveD2, const EdgeWithWeight *edgeListOverloadD,
+                             const SIZE_TYPE *activeOverloadNodePointersD, bool *finished) {
+    streamVertices(overloadNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE traverseIndex = overloadStartNode + index;
+        SIZE_TYPE id = overloadNodeListD[traverseIndex];
         if (isActiveD1[id]) {
             isActiveD1[id] = 0;
-            uint sourceValue = valueD[id];
-            uint finalValue;
-            for (uint i = 0; i < degreeD[id]; i++) {
+            SIZE_TYPE sourceValue = valueD[id];
+            SIZE_TYPE finalValue;
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 EdgeWithWeight checkNode{};
                 checkNode = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                               activeOverloadNodePointersD[overloadStartNode] + i];
                 finalValue = sourceValue + checkNode.weight;
-                uint vertexId = checkNode.toNode;
+                SIZE_TYPE vertexId = checkNode.toNode;
                 if (finalValue < valueD[vertexId]) {
                     //printf("source node %d dest node %d set true\n", id, vertexId);
                     atomicMin(&valueD[vertexId], finalValue);
@@ -644,23 +648,23 @@ sssp_kernelDynamicSwap2Label(uint overloadStartNode, uint overloadNodeNum, const
 }
 
 __global__ void
-sssp_kernelDynamicUvm(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, EdgeWithWeight *edgeListD,
-                      uint *valueD,
-                      uint *labelD1, uint *labelD2) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
+sssp_kernelDynamicUvm(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, EdgeWithWeight *edgeListD,
+                      SIZE_TYPE *valueD,
+                      SIZE_TYPE *labelD1, SIZE_TYPE *labelD2) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
         if (labelD1[id]) {
             labelD1[id] = 0;
         }
-        uint edgeIndex = nodePointersD[index];
+        SIZE_TYPE edgeIndex = nodePointersD[index];
         /*if (isTest) {
             printf("index %d source vertex %d, edgeIndex is %d degree %d \n", index, id, edgeIndex, degreeD[id]);
         }*/
-        uint sourceValue = valueD[id];
-        uint finalValue;
-        for (uint i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
+        for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
             finalValue = sourceValue + edgeListD[i].weight;
-            uint vertexId = edgeListD[i].toNode;
+            SIZE_TYPE vertexId = edgeListD[i].toNode;
             //printf("source vertex %d, edgeindex is %d destnode is %d \n", id, i, edgeListD[i].toNode);
             if (finalValue < valueD[vertexId]) {
                 atomicMin(&valueD[vertexId], finalValue);
@@ -672,26 +676,26 @@ sssp_kernelDynamicUvm(uint activeNum, uint *activeNodesD, uint *nodePointersD, u
 
 
 __global__ void
-bfs_kernelStaticSwap(uint nodeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD,
-                     uint *valueD,
-                     uint *labelD, uint *fragmentRecordsD, uint fragment_size, uint maxpartionSize, uint testNumNodes) {
-    streamVertices(nodeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint edgeIndex = nodePointersD[id];
-        uint sourceValue = valueD[id];
-        uint finalValue;
+bfs_kernelStaticSwap(SIZE_TYPE nodeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD,
+                     SIZE_TYPE *valueD,
+                     SIZE_TYPE *labelD, SIZE_TYPE *fragmentRecordsD, SIZE_TYPE fragment_size, SIZE_TYPE maxpartionSize, SIZE_TYPE testNumNodes) {
+    streamVertices(nodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE edgeIndex = nodePointersD[id];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
 
-        uint fragmentIndex = edgeIndex / fragment_size;
-        uint fragmentMoreIndex = (edgeIndex + degreeD[id]) / fragment_size;
+        SIZE_TYPE fragmentIndex = edgeIndex / fragment_size;
+        SIZE_TYPE fragmentMoreIndex = (edgeIndex + degreeD[id]) / fragment_size;
         if (fragmentMoreIndex > fragmentIndex) {
             atomicAdd(&fragmentRecordsD[fragmentIndex], fragmentIndex * fragment_size + fragment_size - edgeIndex);
         } else {
             atomicAdd(&fragmentRecordsD[fragmentIndex], degreeD[id]);
         }
 
-        for (uint i = 0; i < degreeD[id]; i++) {
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
             finalValue = sourceValue + 1;
-            uint vertexId;
+            SIZE_TYPE vertexId;
             if (finalValue < valueD[vertexId]) {
                 atomicMin(&valueD[vertexId], finalValue);
                 labelD[vertexId] = 1;
@@ -701,25 +705,25 @@ bfs_kernelStaticSwap(uint nodeNum, uint *activeNodesD, uint *nodePointersD, uint
 }
 
 __global__ void
-bfs_kernelStaticSwap(uint nodeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD,
-                     uint *valueD,
-                     uint *labelD, bool *isInD, uint *fragmentRecordsD, uint fragment_size) {
-    streamVertices(nodeNum, [&](uint index) {
-        uint id = activeNodesD[index];
+bfs_kernelStaticSwap(SIZE_TYPE nodeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD,
+                     SIZE_TYPE *valueD,
+                     SIZE_TYPE *labelD, bool *isInD, SIZE_TYPE *fragmentRecordsD, SIZE_TYPE fragment_size) {
+    streamVertices(nodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
         if (isInD[id]) {
-            uint edgeIndex = nodePointersD[id];
-            uint sourceValue = valueD[id];
-            uint finalValue;
-            uint fragmentIndex = edgeIndex / fragment_size;
-            uint fragmentMoreIndex = (edgeIndex + degreeD[id]) / fragment_size;
+            SIZE_TYPE edgeIndex = nodePointersD[id];
+            SIZE_TYPE sourceValue = valueD[id];
+            SIZE_TYPE finalValue;
+            SIZE_TYPE fragmentIndex = edgeIndex / fragment_size;
+            SIZE_TYPE fragmentMoreIndex = (edgeIndex + degreeD[id]) / fragment_size;
             if (fragmentMoreIndex > fragmentIndex) {
                 atomicAdd(&fragmentRecordsD[fragmentIndex], fragmentIndex * fragment_size + fragment_size - edgeIndex);
             } else {
                 atomicAdd(&fragmentRecordsD[fragmentIndex], degreeD[id]);
             }
-            for (uint i = 0; i < degreeD[id]; i++) {
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 finalValue = sourceValue + 1;
-                uint vertexId;
+                SIZE_TYPE vertexId;
                 vertexId = edgeListD[edgeIndex + i];
                 if (finalValue < valueD[vertexId]) {
                     atomicMin(&valueD[vertexId], finalValue);
@@ -731,13 +735,13 @@ bfs_kernelStaticSwap(uint nodeNum, uint *activeNodesD, uint *nodePointersD, uint
 }
 
 __global__ void
-recordFragmentVisit(uint *activeNodeListD, uint activeNodeNum, uint *nodePointersD, uint *degreeD, uint fragment_size,
-                    uint *fragmentRecordsD) {
-    streamVertices(activeNodeNum, [&](uint index) {
-        uint id = activeNodeListD[index];
-        uint edgeIndex = nodePointersD[id];
-        uint fragmentIndex = edgeIndex / fragment_size;
-        uint fragmentMoreIndex = (edgeIndex + degreeD[id]) / fragment_size;
+recordFragmentVisit(SIZE_TYPE *activeNodeListD, SIZE_TYPE activeNodeNum, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE fragment_size,
+                    SIZE_TYPE *fragmentRecordsD) {
+    streamVertices(activeNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodeListD[index];
+        SIZE_TYPE edgeIndex = nodePointersD[id];
+        SIZE_TYPE fragmentIndex = edgeIndex / fragment_size;
+        SIZE_TYPE fragmentMoreIndex = (edgeIndex + degreeD[id]) / fragment_size;
         if (fragmentMoreIndex > fragmentIndex) {
             atomicAdd(&fragmentRecordsD[fragmentIndex], fragmentIndex * fragment_size + fragment_size - edgeIndex);
         } else {
@@ -747,17 +751,17 @@ recordFragmentVisit(uint *activeNodeListD, uint activeNodeNum, uint *nodePointer
 }
 
 /*__global__ void
-bfs_kernelDynamic(uint activeNum, uint *activeNodesD, uint *degreeD, uint *valueD,
-                  uint *labelD, uint overloadNode, uint *overloadEdgeListD,
-                  uint *nodePointersOverloadD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint sourceValue = valueD[id];
-        uint finalValue;
+bfs_kernelDynamic(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *degreeD, SIZE_TYPE *valueD,
+                  SIZE_TYPE *labelD, SIZE_TYPE overloadNode, SIZE_TYPE *overloadEdgeListD,
+                  SIZE_TYPE *nodePointersOverloadD) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
         if (id > overloadNode) {
-            for (uint i = 0; i < degreeD[id]; i++) {
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 finalValue = sourceValue + 1;
-                uint vertexId = overloadEdgeListD[nodePointersOverloadD[index] + i];
+                SIZE_TYPE vertexId = overloadEdgeListD[nodePointersOverloadD[index] + i];
                 if (finalValue < valueD[vertexId]) {
                     atomicMin(&valueD[vertexId], finalValue);
                     labelD[vertexId] = 1;
@@ -768,17 +772,17 @@ bfs_kernelDynamic(uint activeNum, uint *activeNodesD, uint *degreeD, uint *value
 }*/
 
 __global__ void
-bfs_kernelDynamic(uint activeNum, uint *activeNodesD, uint *degreeD, uint *valueD,
-                  uint *labelD, uint overloadNode, uint *overloadEdgeListD,
-                  uint *nodePointersOverloadD) {
-    streamVertices(overloadNode, [&](uint index) {
-        uint theIndex = activeNum - overloadNode + index;
-        uint id = activeNodesD[theIndex];
-        uint sourceValue = valueD[id];
-        uint finalValue;
-        for (uint i = 0; i < degreeD[id]; i++) {
+bfs_kernelDynamic(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *degreeD, SIZE_TYPE *valueD,
+                  SIZE_TYPE *labelD, SIZE_TYPE overloadNode, SIZE_TYPE *overloadEdgeListD,
+                  SIZE_TYPE *nodePointersOverloadD) {
+    streamVertices(overloadNode, [&](SIZE_TYPE index) {
+        SIZE_TYPE theIndex = activeNum - overloadNode + index;
+        SIZE_TYPE id = activeNodesD[theIndex];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
             finalValue = sourceValue + 1;
-            uint vertexId = overloadEdgeListD[nodePointersOverloadD[theIndex] + i];
+            SIZE_TYPE vertexId = overloadEdgeListD[nodePointersOverloadD[theIndex] + i];
             if (finalValue < valueD[vertexId]) {
                 atomicMin(&valueD[vertexId], finalValue);
                 labelD[vertexId] = 1;
@@ -788,16 +792,16 @@ bfs_kernelDynamic(uint activeNum, uint *activeNodesD, uint *degreeD, uint *value
 }
 
 __global__ void
-bfs_kernelDynamicSwap(uint activeNum, uint *activeNodesD, uint *degreeD, uint *valueD,
-                      uint *labelD, uint *overloadEdgeListD,
-                      uint *nodePointersOverloadD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint sourceValue = valueD[id];
-        uint finalValue;
-        for (uint i = 0; i < degreeD[id]; i++) {
+bfs_kernelDynamicSwap(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *degreeD, SIZE_TYPE *valueD,
+                      SIZE_TYPE *labelD, SIZE_TYPE *overloadEdgeListD,
+                      SIZE_TYPE *nodePointersOverloadD) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
             finalValue = sourceValue + 1;
-            uint vertexId = overloadEdgeListD[nodePointersOverloadD[index] + i];
+            SIZE_TYPE vertexId = overloadEdgeListD[nodePointersOverloadD[index] + i];
             if (finalValue < valueD[vertexId]) {
                 atomicMin(&valueD[vertexId], finalValue);
                 labelD[vertexId] = 1;
@@ -807,18 +811,18 @@ bfs_kernelDynamicSwap(uint activeNum, uint *activeNodesD, uint *degreeD, uint *v
 }
 
 __global__ void
-bfs_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD,
-              uint *valueD,
-              bool *labelD, uint overloadNode, uint *overloadEdgeListD, uint *nodePointersOverloadD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
+bfs_kernelOpt(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD,
+              SIZE_TYPE *valueD,
+              bool *labelD, SIZE_TYPE overloadNode, SIZE_TYPE *overloadEdgeListD, SIZE_TYPE *nodePointersOverloadD) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
 
-        uint edgeIndex = nodePointersD[id];
-        uint sourceValue = valueD[id];
-        uint finalValue;
-        for (uint i = 0; i < degreeD[id]; i++) {
+        SIZE_TYPE edgeIndex = nodePointersD[id];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
             finalValue = sourceValue + 1;
-            uint vertexId;
+            SIZE_TYPE vertexId;
             if (id > overloadNode) {
                 vertexId = overloadEdgeListD[nodePointersOverloadD[index] + i];
             } else {
@@ -833,20 +837,20 @@ bfs_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *deg
 }
 
 __global__ void
-cc_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD, uint *valueD,
-             bool *labelD, uint overloadNode, uint *overloadEdgeListD, uint *nodePointersOverloadD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint edgeIndex = nodePointersD[id];
-        uint sourceValue = valueD[id];
-        for (uint i = 0; i < degreeD[id]; i++) {
-            uint vertexId;
+cc_kernelOpt(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD, SIZE_TYPE *valueD,
+             bool *labelD, SIZE_TYPE overloadNode, SIZE_TYPE *overloadEdgeListD, SIZE_TYPE *nodePointersOverloadD) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE edgeIndex = nodePointersD[id];
+        SIZE_TYPE sourceValue = valueD[id];
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
+            SIZE_TYPE vertexId;
             if (id > overloadNode) {
                 vertexId = overloadEdgeListD[nodePointersOverloadD[index] + i];
             } else {
                 vertexId = edgeListD[edgeIndex + i];
             }
-            uint destValue = valueD[vertexId];
+            SIZE_TYPE destValue = valueD[vertexId];
             if (sourceValue < destValue) {
                 atomicMin(&valueD[vertexId], sourceValue);
                 labelD[vertexId] = true;
@@ -859,18 +863,18 @@ cc_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degr
 }
 
 __global__ void
-cc_kernelStaticSwapOpt2Label(uint activeNodesNum, uint *activeNodeListD,
-                             uint *staticNodePointerD, uint *degreeD,
-                             uint *edgeListD, uint *valueD, uint *isActiveD1, uint *isActiveD2, bool *isFinish) {
-    streamVertices(activeNodesNum, [&](uint index) {
-        uint id = activeNodeListD[index];
+cc_kernelStaticSwapOpt2Label(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeListD,
+                             SIZE_TYPE *staticNodePointerD, SIZE_TYPE *degreeD,
+                             SIZE_TYPE *edgeListD, SIZE_TYPE *valueD, SIZE_TYPE *isActiveD1, SIZE_TYPE *isActiveD2, bool *isFinish) {
+    streamVertices(activeNodesNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodeListD[index];
         if (isActiveD1[id]) {
             isActiveD1[id] = 0;
-            uint edgeIndex = staticNodePointerD[id];
-            uint sourceValue = valueD[id];
-            for (uint i = 0; i < degreeD[id]; i++) {
-                uint vertexId = edgeListD[edgeIndex + i];
-                uint destValue = valueD[vertexId];
+            SIZE_TYPE edgeIndex = staticNodePointerD[id];
+            SIZE_TYPE sourceValue = valueD[id];
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
+                SIZE_TYPE vertexId = edgeListD[edgeIndex + i];
+                SIZE_TYPE destValue = valueD[vertexId];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD2[vertexId] = 1;
@@ -887,16 +891,16 @@ cc_kernelStaticSwapOpt2Label(uint activeNodesNum, uint *activeNodeListD,
 }
 
 __global__ void
-cc_kernelStaticSwapOpt(uint activeNodesNum, uint *activeNodeListD,
-                       uint *staticNodePointerD, uint *degreeD,
-                       uint *edgeListD, uint *valueD, uint *isActiveD) {
-    streamVertices(activeNodesNum, [&](uint index) {
-        uint id = activeNodeListD[index];
-        uint edgeIndex = staticNodePointerD[id];
-        uint sourceValue = valueD[id];
-        for (uint i = 0; i < degreeD[id]; i++) {
-            uint vertexId = edgeListD[edgeIndex + i];
-            uint destValue = valueD[vertexId];
+cc_kernelStaticSwapOpt(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeListD,
+                       SIZE_TYPE *staticNodePointerD, SIZE_TYPE *degreeD,
+                       SIZE_TYPE *edgeListD, SIZE_TYPE *valueD, SIZE_TYPE *isActiveD) {
+    streamVertices(activeNodesNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodeListD[index];
+        SIZE_TYPE edgeIndex = staticNodePointerD[id];
+        SIZE_TYPE sourceValue = valueD[id];
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
+            SIZE_TYPE vertexId = edgeListD[edgeIndex + i];
+            SIZE_TYPE destValue = valueD[vertexId];
             if (sourceValue < destValue) {
                 atomicMin(&valueD[vertexId], sourceValue);
                 isActiveD[vertexId] = 1;
@@ -910,16 +914,16 @@ cc_kernelStaticSwapOpt(uint activeNodesNum, uint *activeNodeListD,
 
 
 __global__ void
-cc_kernelStaticAsync(uint activeNodesNum, const uint *activeNodeListD,
-                     const uint *staticNodePointerD, const uint *degreeD,
-                     const uint *edgeListD, uint *valueD, uint *labelD1, uint *labelD2, const bool *isInStaticD,
+cc_kernelStaticAsync(SIZE_TYPE activeNodesNum, const SIZE_TYPE *activeNodeListD,
+                     const SIZE_TYPE *staticNodePointerD, const SIZE_TYPE *degreeD,
+                     const SIZE_TYPE *edgeListD, SIZE_TYPE *valueD, SIZE_TYPE *labelD1, SIZE_TYPE *labelD2, const bool *isInStaticD,
                      bool *finished, int *atomicValue) {
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
     int tidInBlock = blockDim.y * threadIdx.x + threadIdx.y;
     int blockId = blockIdx.x * gridDim.y + blockIdx.y;
     int iter = 0;
-    uint *checkLabel = iter % 2 == 0 ? labelD1 : labelD2;
-    uint *targetLabel = iter % 2 == 0 ? labelD2 : labelD1;
+    SIZE_TYPE *checkLabel = iter % 2 == 0 ? labelD1 : labelD2;
+    SIZE_TYPE *targetLabel = iter % 2 == 0 ? labelD2 : labelD1;
     int syncIndex = 1;
     volatile bool *testFinish = (bool *) finished;
     *testFinish = false;
@@ -952,19 +956,19 @@ cc_kernelStaticAsync(uint activeNodesNum, const uint *activeNodeListD,
 }
 
 __global__ void
-cc_kernelDynamicAsync(uint overloadStartNode, uint overloadNodeNum, const uint *overloadNodeListD, const uint *degreeD,
-                      uint *valueD, uint *labelD1, uint *labelD2, const uint *edgeListOverloadD,
-                      const uint *activeOverloadNodePointersD, bool *finished) {
-    streamVertices(overloadNodeNum, [&](uint index) {
-        uint traverseIndex = overloadStartNode + index;
-        uint id = overloadNodeListD[traverseIndex];
+cc_kernelDynamicAsync(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNum, const SIZE_TYPE *overloadNodeListD, const SIZE_TYPE *degreeD,
+                      SIZE_TYPE *valueD, SIZE_TYPE *labelD1, SIZE_TYPE *labelD2, const SIZE_TYPE *edgeListOverloadD,
+                      const SIZE_TYPE *activeOverloadNodePointersD, bool *finished) {
+    streamVertices(overloadNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE traverseIndex = overloadStartNode + index;
+        SIZE_TYPE id = overloadNodeListD[traverseIndex];
         if (labelD1[id]) {
             labelD1[id] = 0;
-            uint sourceValue = valueD[id];
-            for (uint i = 0; i < degreeD[id]; i++) {
-                uint vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
+            SIZE_TYPE sourceValue = valueD[id];
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
+                SIZE_TYPE vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                                   activeOverloadNodePointersD[overloadStartNode] + i];
-                uint destValue = valueD[vertexId];
+                SIZE_TYPE destValue = valueD[vertexId];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     *finished = false;
@@ -981,21 +985,21 @@ cc_kernelDynamicAsync(uint overloadStartNode, uint overloadNodeNum, const uint *
 
 
 __global__ void
-cc_kernelDynamicSwap2Label(uint overloadStartNode, uint overloadNodeNum, const uint *overloadNodeListD,
-                           const uint *degreeD,
-                           uint *valueD,
-                           uint *isActiveD1, uint *isActiveD2, const uint *edgeListOverloadD,
-                           const uint *activeOverloadNodePointersD, bool *finished) {
-    streamVertices(overloadNodeNum, [&](uint index) {
-        uint traverseIndex = overloadStartNode + index;
-        uint id = overloadNodeListD[traverseIndex];
+cc_kernelDynamicSwap2Label(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNum, const SIZE_TYPE *overloadNodeListD,
+                           const SIZE_TYPE *degreeD,
+                           SIZE_TYPE *valueD,
+                           SIZE_TYPE *isActiveD1, SIZE_TYPE *isActiveD2, const SIZE_TYPE *edgeListOverloadD,
+                           const SIZE_TYPE *activeOverloadNodePointersD, bool *finished) {
+    streamVertices(overloadNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE traverseIndex = overloadStartNode + index;
+        SIZE_TYPE id = overloadNodeListD[traverseIndex];
         if (isActiveD1[id]) {
             isActiveD1[id] = 0;
-            uint sourceValue = valueD[id];
-            for (uint i = 0; i < degreeD[id]; i++) {
-                uint vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
+            SIZE_TYPE sourceValue = valueD[id];
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
+                SIZE_TYPE vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                                   activeOverloadNodePointersD[overloadStartNode] + i];
-                uint destValue = valueD[vertexId];
+                SIZE_TYPE destValue = valueD[vertexId];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD2[vertexId] = 1;
@@ -1011,23 +1015,23 @@ cc_kernelDynamicSwap2Label(uint overloadStartNode, uint overloadNodeNum, const u
 }
 
 __global__ void
-sssp_kernelStaticSwapOpt2Label(uint activeNodesNum, const uint *activeNodeListD,
-                               const uint *staticNodePointerD, const uint *degreeD,
-                               EdgeWithWeight *edgeListD, uint *valueD, uint *isActiveD1, uint *isActiveD2,
+sssp_kernelStaticSwapOpt2Label(SIZE_TYPE activeNodesNum, const SIZE_TYPE *activeNodeListD,
+                               const SIZE_TYPE *staticNodePointerD, const SIZE_TYPE *degreeD,
+                               EdgeWithWeight *edgeListD, SIZE_TYPE *valueD, SIZE_TYPE *isActiveD1, SIZE_TYPE *isActiveD2,
                                bool *isFinish) {
 
-    streamVertices(activeNodesNum, [&](uint index) {
-        uint id = activeNodeListD[index];
+    streamVertices(activeNodesNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodeListD[index];
         if (isActiveD1[id]) {
             isActiveD1[id] = 0;
-            uint edgeIndex = staticNodePointerD[id];
-            uint sourceValue = valueD[id];
-            uint finalValue;
-            for (uint i = 0; i < degreeD[id]; i++) {
+            SIZE_TYPE edgeIndex = staticNodePointerD[id];
+            SIZE_TYPE sourceValue = valueD[id];
+            SIZE_TYPE finalValue;
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 EdgeWithWeight checkNode{};
                 checkNode = edgeListD[edgeIndex + i];
                 finalValue = sourceValue + checkNode.weight;
-                uint vertexId = checkNode.toNode;
+                SIZE_TYPE vertexId = checkNode.toNode;
                 if (finalValue < valueD[vertexId]) {
                     atomicMin(&valueD[vertexId], finalValue);
                     isActiveD2[vertexId] = 1;
@@ -1041,15 +1045,15 @@ sssp_kernelStaticSwapOpt2Label(uint activeNodesNum, const uint *activeNodeListD,
 
 
 __global__ void
-sssp_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, EdgeWithWeight *edgeListD,
-               uint *valueD,
-               bool *labelD, uint overloadNode, EdgeWithWeight *overloadEdgeListD, uint *nodePointersOverloadD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint edgeIndex = nodePointersD[id];
-        uint sourceValue = valueD[id];
-        uint finalValue;
-        for (uint i = 0; i < degreeD[id]; i++) {
+sssp_kernelOpt(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, EdgeWithWeight *edgeListD,
+               SIZE_TYPE *valueD,
+               bool *labelD, SIZE_TYPE overloadNode, EdgeWithWeight *overloadEdgeListD, SIZE_TYPE *nodePointersOverloadD) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE edgeIndex = nodePointersD[id];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
             EdgeWithWeight checkNode{};
             if (id > overloadNode) {
                 checkNode = overloadEdgeListD[nodePointersOverloadD[index] + i];
@@ -1057,7 +1061,7 @@ sssp_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *de
                 checkNode = edgeListD[edgeIndex + i];
             }
             finalValue = sourceValue + checkNode.weight;
-            uint vertexId = checkNode.toNode;
+            SIZE_TYPE vertexId = checkNode.toNode;
             if (finalValue < valueD[vertexId]) {
                 atomicMin(&valueD[vertexId], finalValue);
                 labelD[vertexId] = true;
@@ -1068,15 +1072,15 @@ sssp_kernelOpt(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *de
 }
 
 __global__ void
-bfs_kernelOptOfSorted(uint activeNum, uint *activeNodesD, uint *nodePointersD, uint *degreeD, uint *edgeListD,
-                      uint *edgeListOverload, uint *valueD, bool *labelD, bool *isInListD,
-                      uint *nodePointersOverloadD) {
-    streamVertices(activeNum, [&](uint index) {
-        uint id = activeNodesD[index];
-        uint sourceValue = valueD[id];
-        uint finalValue;
-        uint edgeIndex;
-        uint *edgeList;
+bfs_kernelOptOfSorted(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD, SIZE_TYPE *degreeD, SIZE_TYPE *edgeListD,
+                      SIZE_TYPE *edgeListOverload, SIZE_TYPE *valueD, bool *labelD, bool *isInListD,
+                      SIZE_TYPE *nodePointersOverloadD) {
+    streamVertices(activeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodesD[index];
+        SIZE_TYPE sourceValue = valueD[id];
+        SIZE_TYPE finalValue;
+        SIZE_TYPE edgeIndex;
+        SIZE_TYPE *edgeList;
         if (!isInListD[id]) {
             edgeIndex = nodePointersOverloadD[index];
             edgeList = edgeListOverload;
@@ -1085,9 +1089,9 @@ bfs_kernelOptOfSorted(uint activeNum, uint *activeNodesD, uint *nodePointersD, u
             edgeList = edgeListD;
         }
 
-        for (uint i = 0; i < degreeD[id]; i++) {
+        for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
             finalValue = sourceValue + 1;
-            uint vertexId = edgeList[edgeIndex + i];
+            SIZE_TYPE vertexId = edgeList[edgeIndex + i];
             if (finalValue < valueD[vertexId]) {
                 atomicMin(&valueD[vertexId], finalValue);
                 labelD[vertexId] = true;
@@ -1098,12 +1102,12 @@ bfs_kernelOptOfSorted(uint activeNum, uint *activeNodesD, uint *nodePointersD, u
 }
 
 __global__ void
-setFragmentData(uint activeNodeNum, uint *activeNodeList, uint *staticNodePointers, uint *staticFragmentData,
-                uint staticFragmentNum, uint fragmentSize, bool *isInStatic) {
-    streamVertices(activeNodeNum, [&](uint index) {
-        uint vertexId = activeNodeList[index];
+setFragmentData(SIZE_TYPE activeNodeNum, SIZE_TYPE *activeNodeList, SIZE_TYPE *staticNodePointers, SIZE_TYPE *staticFragmentData,
+                SIZE_TYPE staticFragmentNum, SIZE_TYPE fragmentSize, bool *isInStatic) {
+    streamVertices(activeNodeNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE vertexId = activeNodeList[index];
         if (isInStatic[vertexId]) {
-            uint staticFragmentIndex = staticNodePointers[vertexId] / fragmentSize;
+            SIZE_TYPE staticFragmentIndex = staticNodePointers[vertexId] / fragmentSize;
             if (staticFragmentIndex < staticFragmentNum) {
                 staticFragmentData[staticFragmentIndex] = 1;
             }
@@ -1112,9 +1116,9 @@ setFragmentData(uint activeNodeNum, uint *activeNodeList, uint *staticNodePointe
 }
 
 __global__ void
-setStaticFragmentData(uint staticFragmentNum, uint *canSwapFragmentD, uint *canSwapFragmentPrefixD,
-                      uint *staticFragmentDataD) {
-    streamVertices(staticFragmentNum, [&](uint index) {
+setStaticFragmentData(SIZE_TYPE staticFragmentNum, SIZE_TYPE *canSwapFragmentD, SIZE_TYPE *canSwapFragmentPrefixD,
+                      SIZE_TYPE *staticFragmentDataD) {
+    streamVertices(staticFragmentNum, [&](SIZE_TYPE index) {
         if (canSwapFragmentD[index] > 0) {
             staticFragmentDataD[canSwapFragmentPrefixD[index]] = index;
             canSwapFragmentD[index] = 0;
@@ -1123,9 +1127,9 @@ setStaticFragmentData(uint staticFragmentNum, uint *canSwapFragmentD, uint *canS
 }
 
 __global__ void
-setFragmentDataOpt(uint *staticFragmentData, uint staticFragmentNum, uint *staticFragmentVisitRecordsD) {
-    streamVertices(staticFragmentNum, [&](uint index) {
-        uint fragmentId = index;
+setFragmentDataOpt(SIZE_TYPE *staticFragmentData, SIZE_TYPE staticFragmentNum, SIZE_TYPE *staticFragmentVisitRecordsD) {
+    streamVertices(staticFragmentNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE fragmentId = index;
         if (staticFragmentVisitRecordsD[fragmentId] > 3600) {
             staticFragmentData[fragmentId] = 1;
             staticFragmentVisitRecordsD[fragmentId] = 0;
@@ -1136,9 +1140,9 @@ setFragmentDataOpt(uint *staticFragmentData, uint staticFragmentNum, uint *stati
 }
 
 __global__ void
-setFragmentDataOpt4Pr(uint *staticFragmentData, uint fragmentNum, uint *fragmentVisitRecordsD,
-                      bool *isActiveFragmentD, uint *fragmentNormalMap2StaticD, uint maxStaticFragment) {
-    streamVertices(fragmentNum, [&](uint fragmentId) {
+setFragmentDataOpt4Pr(SIZE_TYPE *staticFragmentData, SIZE_TYPE fragmentNum, SIZE_TYPE *fragmentVisitRecordsD,
+                      bool *isActiveFragmentD, SIZE_TYPE *fragmentNormalMap2StaticD, SIZE_TYPE maxStaticFragment) {
+    streamVertices(fragmentNum, [&](SIZE_TYPE fragmentId) {
         /*if (fragmentId == 887550) {
             printf("fragmentId 887550 record %d \n", fragmentVisitRecordsD[fragmentId]);
         }*/
@@ -1150,7 +1154,7 @@ setFragmentDataOpt4Pr(uint *staticFragmentData, uint fragmentNum, uint *fragment
             fragmentVisitRecordsD[fragmentId] = 0;
         }
         if (!isActiveFragmentD[fragmentId]) {
-            uint staticFragmentIndex = fragmentNormalMap2StaticD[fragmentId];
+            SIZE_TYPE staticFragmentIndex = fragmentNormalMap2StaticD[fragmentId];
             if (staticFragmentIndex < maxStaticFragment) {
                 staticFragmentData[staticFragmentIndex] = 1;
             }
@@ -1158,22 +1162,22 @@ setFragmentDataOpt4Pr(uint *staticFragmentData, uint fragmentNum, uint *fragment
     });
 }
 
-uint reduceBool(uint *resultD, bool *isActiveD, uint vertexSize, dim3 grid, dim3 block) {
+SIZE_TYPE reduceBool(SIZE_TYPE *resultD, bool *isActiveD, SIZE_TYPE vertexSize, dim3 grid, dim3 block) {
     //printf("reduceBool \n");
-    uint activeNodesNum = 0;
+    SIZE_TYPE activeNodesNum = 0;
     int blockSize = block.x;
-    reduceByBool<<<grid, block, block.x * sizeof(uint)>>>(vertexSize, isActiveD, resultD);
-    reduceResult<56><<<1, 64, block.x * sizeof(uint)>>>(resultD);
-    cudaMemcpy(&activeNodesNum, resultD, sizeof(uint), cudaMemcpyDeviceToHost);
+    reduceByBool<<<grid, block, block.x * sizeof(SIZE_TYPE)>>>(vertexSize, isActiveD, resultD);
+    reduceResult<56><<<1, 64, block.x * sizeof(SIZE_TYPE)>>>(resultD);
+    cudaMemcpy(&activeNodesNum, resultD, sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
     return activeNodesNum;
 }
 
-__device__ void reduceStreamVertices(int vertices, bool *rawData, uint *result) {
+__device__ void reduceStreamVertices(SIZE_TYPE vertices, bool *rawData, SIZE_TYPE *result) {
 
-    extern __shared__ uint sdata[];
-    uint tid = threadIdx.x;
+    extern __shared__ SIZE_TYPE sdata[];
+    SIZE_TYPE tid = threadIdx.x;
     sdata[tid] = 0;
-    for (auto i : grid_stride_range(0, vertices)) {
+    for (auto i : grid_stride_range(SIZE_TYPE(0), vertices)) {
         sdata[tid] += rawData[i];
     }
     __syncthreads();
@@ -1201,14 +1205,14 @@ __device__ void reduceStreamVertices(int vertices, bool *rawData, uint *result) 
     }
 }
 
-__global__ void reduceByBool(uint vertexSize, bool *rawData, uint *result) {
+__global__ void reduceByBool(SIZE_TYPE vertexSize, bool *rawData, SIZE_TYPE *result) {
     reduceStreamVertices(vertexSize, rawData, result);
 }
 
 template<int blockSize>
-__global__ void reduceResult(uint *result) {
-    extern __shared__ uint sdata[];
-    uint tid = threadIdx.x;
+__global__ void reduceResult(SIZE_TYPE *result) {
+    extern __shared__ SIZE_TYPE sdata[];
+    SIZE_TYPE tid = threadIdx.x;
     sdata[tid] = 0;
     if (tid < blockSize) {
         sdata[tid] = result[tid];
@@ -1229,8 +1233,8 @@ __global__ void reduceResult(uint *result) {
     }
 }
 
-template<int BS> __global__ void scanWarpReduceInBlock(int n, bool* in, uint* out) {
-    extern __shared__ uint sdata[];
+template<int BS> __global__ void scanWarpReduceInBlock(int n, bool* in, SIZE_TYPE* out) {
+    extern __shared__ SIZE_TYPE sdata[];
     int id = threadIdx.x + blockIdx.x * blockDim.x;
     int warpId = threadIdx.x / 32;
     int idInWarp = threadIdx.x % 32;

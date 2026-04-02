@@ -25,7 +25,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
     }
 }
 
-const static uint fragment_size = 4096;
+const static SIZE_TYPE fragment_size = 4096;
 //string testGraphPath = "/home/gxl/labproject/subway/uk-2007-04/output.txt";
 const static string converPath = "/home/gxl/labproject/subway/uk-2007-04/uk-2007-04.bcsr";
 const static string testGraphPath = "/home/gxl/dataset/friendster/friendster.bcsr";
@@ -37,74 +37,74 @@ const static string randomDataPath = "/home/gxl/labproject/subway/friendsterChan
 const static string prGraphPath = "/home/gxl/dataset/friendster/friendster.bcsc";
 const static string ssspGraphPath = "/home/gxl/dataset/friendster/friendster.bwcsr";
 
-const static uint DIST_INFINITY = std::numeric_limits<unsigned int>::max() - 1;
-const static uint trunk_size = 1 << 24;
+const static SIZE_TYPE DIST_INFINITY = std::numeric_limits<unsigned long long>::max() - 1;
+const static SIZE_TYPE trunk_size = 1 << 24;
 
 struct CommonPartitionInfo {
-    uint startVertex;
-    uint endVertex;
-    uint nodePointerOffset;
-    uint partitionEdgeSize;
+    SIZE_TYPE startVertex;
+    SIZE_TYPE endVertex;
+    SIZE_TYPE nodePointerOffset;
+    SIZE_TYPE partitionEdgeSize;
 };
 struct PartEdgeListInfo {
-    uint partActiveNodeNums;
-    uint partEdgeNums;
-    uint partStartIndex;
+    SIZE_TYPE partActiveNodeNums;
+    SIZE_TYPE partEdgeNums;
+    SIZE_TYPE partStartIndex;
 };
 
 void
 checkNeedTransferPartition(bool *needTransferPartition, CommonPartitionInfo *partitionInfoList, bool *isActiveNodeList,
-                           int partitionNum, uint testNumNodes, uint &activeNum);
+                           int partitionNum, SIZE_TYPE testNumNodes, SIZE_TYPE &activeNum);
 
 void checkNeedTransferPartitionOpt(bool *needTransferPartition, CommonPartitionInfo *partitionInfoList,
                                    bool *isActiveNodeList,
-                                   int partitionNum, uint testNumNodes, uint &activeNum);
+                                   int partitionNum, SIZE_TYPE testNumNodes, SIZE_TYPE &activeNum);
 
 
-void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, uint testNumNodes, float param,
+void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, SIZE_TYPE testNumNodes, float param,
                          int edgeSize, int nodeParamSize = 15);
 
 
-void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, uint testNumNodes, float param,
-                         int edgeSize, uint edgeListSize, int nodeParamsSize = 15);
+void getMaxPartitionSize(unsigned long &max_partition_size, unsigned long &totalSize, SIZE_TYPE testNumNodes, float param,
+                         int edgeSize, SIZE_TYPE edgeListSize, int nodeParamsSize = 15);
 
-void caculatePartInfoForEdgeList(uint *overloadNodePointers, uint *overloadNodeList, uint *degree,
-                                 vector<PartEdgeListInfo> &partEdgeListInfoArr, uint overloadNodeNum,
-                                 uint overloadMemorySize, uint overloadEdgeNum);
+void caculatePartInfoForEdgeList(SIZE_TYPE *overloadNodePointers, SIZE_TYPE *overloadNodeList, SIZE_TYPE *degree,
+                                 vector<PartEdgeListInfo> &partEdgeListInfoArr, SIZE_TYPE overloadNodeNum,
+                                 SIZE_TYPE overloadMemorySize, SIZE_TYPE overloadEdgeNum);
 
 static void fillDynamic(int tId,
                         int numThreads,
-                        unsigned int overloadNodeBegin,
-                        unsigned int numActiveNodes,
-                        unsigned int *outDegree,
-                        unsigned int *activeNodesPointer,
-                        unsigned int *nodePointer,
-                        unsigned int *activeNodes,
-                        uint *edgeListOverload,
-                        uint *edgeList) {
+                        SIZE_TYPE overloadNodeBegin,
+                        SIZE_TYPE numActiveNodes,
+                        SIZE_TYPE *outDegree,
+                        SIZE_TYPE *activeNodesPointer,
+                        SIZE_TYPE *nodePointer,
+                        SIZE_TYPE *activeNodes,
+                        SIZE_TYPE *edgeListOverload,
+                        SIZE_TYPE *edgeList) {
     float waitToHandleNum = numActiveNodes - overloadNodeBegin;
     float numThreadsF = numThreads;
-    unsigned int chunkSize = ceil(waitToHandleNum / numThreadsF);
-    unsigned int left, right;
+    SIZE_TYPE chunkSize = ceil(waitToHandleNum / numThreadsF);
+    SIZE_TYPE left, right;
     left = tId * chunkSize + overloadNodeBegin;
     right = min(left + chunkSize, numActiveNodes);
-    unsigned int thisNode;
-    unsigned int thisDegree;
-    unsigned int fromHere;
-    unsigned int fromThere;
-    for (unsigned int i = left; i < right; i++) {
+    SIZE_TYPE thisNode;
+    SIZE_TYPE thisDegree;
+    SIZE_TYPE fromHere;
+    SIZE_TYPE fromThere;
+    for (SIZE_TYPE i = left; i < right; i++) {
         thisNode = activeNodes[i];
         thisDegree = outDegree[thisNode];
         fromHere = activeNodesPointer[i];
         fromThere = nodePointer[thisNode];
-        for (unsigned int j = 0; j < thisDegree; j++) {
+        for (SIZE_TYPE j = 0; j < thisDegree; j++) {
             edgeListOverload[fromHere + j] = edgeList[fromThere + j];
         }
     }
 }
 
 
-static void writeTrunkVistInIteration(vector<vector<uint>> recordData, const string& outputPath) {
+static void writeTrunkVistInIteration(vector<vector<SIZE_TYPE>> recordData, const string& outputPath) {
     ofstream fout(outputPath);
     for (int i = 0; i < recordData.size(); i++) {
         // output by iteration
@@ -116,15 +116,15 @@ static void writeTrunkVistInIteration(vector<vector<uint>> recordData, const str
     fout.close();
 }
 
-static vector<uint> countDataByIteration(uint edgeListSize, uint nodeListSize, uint* nodePointers, uint* degree, int *isActive) {
-    uint partSizeCursor = 0;
-    uint partSize = trunk_size / sizeof(uint);
-    uint partNum = edgeListSize / partSize;
-    vector<uint> thisIterationVisit(partNum + 1);
-    for (uint i = 0; i < nodeListSize; i++) {
-        uint edgeStartIndex = nodePointers[i];
-        uint edgeEndIndex = nodePointers[i] + degree[i];
-        uint maxPartIndex = partSizeCursor * partSize + partSize;
+static vector<SIZE_TYPE> countDataByIteration(SIZE_TYPE edgeListSize, SIZE_TYPE nodeListSize, SIZE_TYPE* nodePointers, SIZE_TYPE* degree, int *isActive) {
+    SIZE_TYPE partSizeCursor = 0;
+    SIZE_TYPE partSize = trunk_size / sizeof(SIZE_TYPE);
+    SIZE_TYPE partNum = edgeListSize / partSize;
+    vector<SIZE_TYPE> thisIterationVisit(partNum + 1);
+    for (SIZE_TYPE i = 0; i < nodeListSize; i++) {
+        SIZE_TYPE edgeStartIndex = nodePointers[i];
+        SIZE_TYPE edgeEndIndex = nodePointers[i] + degree[i];
+        SIZE_TYPE maxPartIndex = partSizeCursor * partSize + partSize;
 
         if (edgeStartIndex < maxPartIndex && edgeEndIndex < maxPartIndex) {
             if(isActive[i]) thisIterationVisit[partSizeCursor] += degree[i];
@@ -140,15 +140,15 @@ static vector<uint> countDataByIteration(uint edgeListSize, uint nodeListSize, u
     return thisIterationVisit;
 }
 
-static vector<uint> countDataByIteration(uint edgeListSize, uint nodeListSize, uint* nodePointers, uint* degree, uint *isActive) {
-    uint partSizeCursor = 0;
-    uint partSize = trunk_size / sizeof(uint);
-    uint partNum = edgeListSize / partSize;
-    vector<uint> thisIterationVisit(partNum + 1);
-    for (uint i = 0; i < nodeListSize; i++) {
-        uint edgeStartIndex = nodePointers[i];
-        uint edgeEndIndex = nodePointers[i] + degree[i];
-        uint maxPartIndex = partSizeCursor * partSize + partSize;
+static vector<SIZE_TYPE> countDataByIteration(SIZE_TYPE edgeListSize, SIZE_TYPE nodeListSize, SIZE_TYPE* nodePointers, SIZE_TYPE* degree, SIZE_TYPE *isActive) {
+    SIZE_TYPE partSizeCursor = 0;
+    SIZE_TYPE partSize = trunk_size / sizeof(SIZE_TYPE);
+    SIZE_TYPE partNum = edgeListSize / partSize;
+    vector<SIZE_TYPE> thisIterationVisit(partNum + 1);
+    for (SIZE_TYPE i = 0; i < nodeListSize; i++) {
+        SIZE_TYPE edgeStartIndex = nodePointers[i];
+        SIZE_TYPE edgeEndIndex = nodePointers[i] + degree[i];
+        SIZE_TYPE maxPartIndex = partSizeCursor * partSize + partSize;
 
         if (edgeStartIndex < maxPartIndex && edgeEndIndex < maxPartIndex) {
             if(isActive[i]) thisIterationVisit[partSizeCursor] += degree[i];
@@ -164,8 +164,8 @@ static vector<uint> countDataByIteration(uint edgeListSize, uint nodeListSize, u
     return thisIterationVisit;
 }
 
-static void calculateDegree(uint nodesSize, uint* nodePointers, uint edgesSize, uint* degree) {
-    for (uint i = 0; i < nodesSize - 1; i++) {
+static void calculateDegree(SIZE_TYPE nodesSize, SIZE_TYPE* nodePointers, SIZE_TYPE edgesSize, SIZE_TYPE* degree) {
+    for (SIZE_TYPE i = 0; i < nodesSize - 1; i++) {
         if (nodePointers[i] > edgesSize) {
             cout << i << "   " << nodePointers[i] << endl;
             break;

@@ -5,39 +5,39 @@
 
 void conventionParticipateBFS(string bfsPath, int sampleSourceNode) {
     cout << "===============conventionParticipateBFS==============" << endl;
-    uint testNumNodes = 0;
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
     ulong traverseSum = 0;
-    uint *nodePointersI;
-    uint *edgeList;
+    SIZE_TYPE *nodePointersI;
+    SIZE_TYPE *edgeList;
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(bfsPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
-    nodePointersI = new uint[testNumNodes];
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
-    edgeList = new uint[testNumEdge];
-    infile.read((char *) edgeList, sizeof(uint) * testNumEdge);
+    nodePointersI = new SIZE_TYPE[testNumNodes];
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
+    edgeList = new SIZE_TYPE[testNumEdge];
+    infile.read((char *) edgeList, sizeof(SIZE_TYPE) * testNumEdge);
     infile.close();
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, 0.9, sizeof(uint), 5);
-    uint partitionNum;
+    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, 0.9, sizeof(SIZE_TYPE), 5);
+    SIZE_TYPE partitionNum;
     if (testNumEdge > max_partition_size) {
         partitionNum = testNumEdge / max_partition_size + 1;
     } else {
         partitionNum = 1;
     }
 
-    uint *degree = new uint[testNumNodes];
-    uint *value = new uint[testNumNodes];
+    SIZE_TYPE *degree = new SIZE_TYPE[testNumNodes];
+    SIZE_TYPE *value = new SIZE_TYPE[testNumNodes];
     bool *isActiveNodeList = new bool[testNumNodes];
     CommonPartitionInfo *partitionInfoList = new CommonPartitionInfo[partitionNum];
     bool *needTransferPartition = new bool[partitionNum];
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         isActiveNodeList[i] = false;
         value[i] = UINT_MAX;
         if (i + 1 < testNumNodes) {
@@ -50,14 +50,14 @@ void conventionParticipateBFS(string bfsPath, int sampleSourceNode) {
             return;
         }
     }
-    for (uint i = 0; i < partitionNum; i++) {
+    for (SIZE_TYPE i = 0; i < partitionNum; i++) {
         partitionInfoList[i].startVertex = -1;
         partitionInfoList[i].endVertex = -1;
         partitionInfoList[i].nodePointerOffset = -1;
         partitionInfoList[i].partitionEdgeSize = -1;
     }
     int tempPartitionIndex = 0;
-    uint tempNodeIndex = 0;
+    SIZE_TYPE tempNodeIndex = 0;
     while (tempNodeIndex < testNumNodes) {
         if (partitionInfoList[tempPartitionIndex].startVertex == -1) {
             partitionInfoList[tempPartitionIndex].startVertex = tempNodeIndex;
@@ -76,22 +76,22 @@ void conventionParticipateBFS(string bfsPath, int sampleSourceNode) {
         }
     }
 
-    uint *degreeD;
+    SIZE_TYPE *degreeD;
     bool *isActiveNodeListD;
     bool *nextActiveNodeListD;
-    uint *nodePointerListD;
-    uint *partitionEdgeListD;
-    uint *valueD;
+    SIZE_TYPE *nodePointerListD;
+    SIZE_TYPE *partitionEdgeListD;
+    SIZE_TYPE *valueD;
 
-    cudaMalloc(&degreeD, testNumNodes * sizeof(uint));
-    cudaMalloc(&valueD, testNumNodes * sizeof(uint));
+    cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE));
     cudaMalloc(&isActiveNodeListD, testNumNodes * sizeof(bool));
     cudaMalloc(&nextActiveNodeListD, testNumNodes * sizeof(bool));
-    cudaMalloc(&nodePointerListD, testNumNodes * sizeof(uint));
-    cudaMalloc(&partitionEdgeListD, max_partition_size * sizeof(uint));
+    cudaMalloc(&nodePointerListD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&partitionEdgeListD, max_partition_size * sizeof(SIZE_TYPE));
 
-    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
-    cudaMemcpy(nodePointerListD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
+    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+    cudaMemcpy(nodePointerListD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     cudaMemset(nextActiveNodeListD, 0, testNumNodes * sizeof(bool));
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -100,7 +100,7 @@ void conventionParticipateBFS(string bfsPath, int sampleSourceNode) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = rand() % testNumNodes;
+        SIZE_TYPE sourceNode = rand() % testNumNodes;
         sourceNode = sampleSourceNode;
         //sourceNode = 25838548;
         //sourceNode = 26890152;
@@ -112,13 +112,13 @@ void conventionParticipateBFS(string bfsPath, int sampleSourceNode) {
         }
         isActiveNodeList[sourceNode] = true;
         value[sourceNode] = 1;
-        cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
-        uint activeSum = 0;
+        cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+        SIZE_TYPE activeSum = 0;
         int iteration = 0;
 
         auto startProcessing = std::chrono::steady_clock::now();
         while (true) {
-            uint activeNodeNum = 0;
+            SIZE_TYPE activeNodeNum = 0;
             checkNeedTransferPartitionOpt(needTransferPartition, partitionInfoList, isActiveNodeList, partitionNum,
                                           testNumNodes, activeNodeNum);
             if (activeNodeNum <= 0) {
@@ -131,8 +131,8 @@ void conventionParticipateBFS(string bfsPath, int sampleSourceNode) {
             for (int j = 0; j < partitionNum; j++) {
                 if (needTransferPartition[j]) {
                     cudaMemcpy(partitionEdgeListD, edgeList + partitionInfoList[j].nodePointerOffset,
-                               partitionInfoList[j].partitionEdgeSize * sizeof(uint), cudaMemcpyHostToDevice);
-                    traverseSum += partitionInfoList[j].partitionEdgeSize * sizeof(uint);
+                               partitionInfoList[j].partitionEdgeSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+                    traverseSum += partitionInfoList[j].partitionEdgeSize * sizeof(SIZE_TYPE);
                     bfsKernel_CommonPartition<<<grid, block>>>(partitionInfoList[j].startVertex,
                                                                partitionInfoList[j].endVertex,
                                                                partitionInfoList[j].nodePointerOffset,
@@ -168,18 +168,18 @@ void conventionParticipateBFS(string bfsPath, int sampleSourceNode) {
 
 
 long
-bfsCaculateInShareReturnValue(uint testNumNodes, uint testNumEdge, uint *nodePointersI, uint *edgeList, uint sourceNode,
-                              uint **bfsValue, int valueIndex) {
+bfsCaculateInShareReturnValue(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, SIZE_TYPE *edgeList, SIZE_TYPE sourceNode,
+                              SIZE_TYPE **bfsValue, int valueIndex) {
     auto start = std::chrono::steady_clock::now();
-    uint *degree;
-    uint *value;
-    uint sourceCode = 0;
-    gpuErrorcheck(cudaMallocManaged(&degree, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMallocManaged(&value, testNumNodes * sizeof(uint)));
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE sourceCode = 0;
+    gpuErrorcheck(cudaMallocManaged(&degree, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMallocManaged(&value, testNumNodes * sizeof(SIZE_TYPE)));
 
     auto startPreCaculate = std::chrono::steady_clock::now();
     //caculate degree
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -191,7 +191,7 @@ bfsCaculateInShareReturnValue(uint testNumNodes, uint testNumEdge, uint *nodePoi
     cout << "sourceNode " << sourceNode << " degree " << degree[sourceNode] << endl;
     bool *label;
     gpuErrorcheck(cudaMallocManaged(&label, testNumNodes * sizeof(bool)));
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = false;
         value[i] = UINT_MAX;
     }
@@ -201,12 +201,12 @@ bfsCaculateInShareReturnValue(uint testNumNodes, uint testNumEdge, uint *nodePoi
 
     label[sourceCode] = true;
     value[sourceCode] = 0;
-    uint *activeNodeList;
-    cudaMallocManaged(&activeNodeList, testNumNodes * sizeof(uint));
+    SIZE_TYPE *activeNodeList;
+    cudaMallocManaged(&activeNodeList, testNumNodes * sizeof(SIZE_TYPE));
     //cacaulate the active node And make active node array
-    uint *activeNodeLabelingD;
+    SIZE_TYPE *activeNodeLabelingD;
     gpuErrorcheck(cudaMallocManaged(&activeNodeLabelingD, testNumNodes * sizeof(unsigned int)));
-    uint *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
     gpuErrorcheck(cudaMallocManaged(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     dim3 grid = dim3(56, 1, 1);
     dim3 block = dim3(1024, 1, 1);
@@ -214,9 +214,9 @@ bfsCaculateInShareReturnValue(uint testNumNodes, uint testNumEdge, uint *nodePoi
     setLabeling<<<grid, block>>>(testNumNodes, label, activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling(activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling_prefixsum(activeNodeLabelingPrefixD);
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     auto startProcessing = std::chrono::steady_clock::now();
     while (activeNodesNum > 0) {
         iter++;
@@ -247,25 +247,25 @@ bfsCaculateInShareReturnValue(uint testNumNodes, uint testNumEdge, uint *nodePoi
 }
 
 void bfsShare(string bfsPath, int sampleSourceNode) {
-    uint testNumNodes = 0;
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
-    uint *nodePointersI;
-    uint *edgeList;
+    SIZE_TYPE *nodePointersI;
+    SIZE_TYPE *edgeList;
     bool isUseShare = true;
 
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(bfsPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
-    gpuErrorcheck(cudaMallocManaged(&nodePointersI, (testNumNodes + 1) * sizeof(uint)));
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
-    gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(uint)));
-    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
-    cudaMemAdvise(edgeList, (numEdge) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
-    infile.read((char *) edgeList, sizeof(uint) * testNumEdge);
+    gpuErrorcheck(cudaMallocManaged(&nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE)));
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
+    gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(SIZE_TYPE)));
+    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
+    cudaMemAdvise(edgeList, (numEdge) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
+    infile.read((char *) edgeList, sizeof(SIZE_TYPE) * testNumEdge);
     infile.close();
     //preprocessData(nodePointersI, edgeList, testNumNodes, testNumEdge);
     auto endReadGraph = std::chrono::steady_clock::now();
@@ -275,7 +275,7 @@ void bfsShare(string bfsPath, int sampleSourceNode) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = rand() % testNumNodes;
+        SIZE_TYPE sourceNode = rand() % testNumNodes;
         sourceNode = sampleSourceNode;
         cout << "sourceNode " << sourceNode << endl;
         timeSum += bfsCaculateInShare(testNumNodes, testNumEdge, nodePointersI, edgeList, sourceNode);
@@ -285,23 +285,23 @@ void bfsShare(string bfsPath, int sampleSourceNode) {
 }
 
 void bfsOpt(string bfsPath, int sampleSourceNode, float adviseK) {
-    uint testNumNodes = 0;
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
-    uint *nodePointersI;
-    uint *edgeList;
+    SIZE_TYPE *nodePointersI;
+    SIZE_TYPE *edgeList;
     bool isUseShare = true;
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(bfsPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
 
-    nodePointersI = new uint[testNumNodes + 1];
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
-    edgeList = new uint[testNumEdge + 1];
-    infile.read((char *) edgeList, sizeof(uint) * testNumEdge);
+    nodePointersI = new SIZE_TYPE[testNumNodes + 1];
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
+    edgeList = new SIZE_TYPE[testNumEdge + 1];
+    infile.read((char *) edgeList, sizeof(SIZE_TYPE) * testNumEdge);
     infile.close();
     auto endReadGraph = std::chrono::steady_clock::now();
     long durationReadGraph = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -310,7 +310,7 @@ void bfsOpt(string bfsPath, int sampleSourceNode, float adviseK) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = rand() % testNumNodes;
+        SIZE_TYPE sourceNode = rand() % testNumNodes;
         sourceNode = 47235513;
         sourceNode = 25838548;
         cout << "sourceNode " << sourceNode << endl;
@@ -334,35 +334,35 @@ void bfsOpt(string bfsPath, int sampleSourceNode, float adviseK) {
 }
 
 void testBFS() {
-    uint testNumNodes = 0;
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
-    uint *nodePointersI;
-    uint *edgeList;
+    SIZE_TYPE *nodePointersI;
+    SIZE_TYPE *edgeList;
     bool isUseShare = true;
 
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(testGraphPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
 
     if (isUseShare) {
-        gpuErrorcheck(cudaMallocManaged(&nodePointersI, (testNumNodes + 1) * sizeof(uint)));
-        infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
-        gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(uint)));
-        cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
-        cudaMemAdvise(edgeList, (numEdge) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
-        infile.read((char *) edgeList, sizeof(uint) * testNumEdge);
+        gpuErrorcheck(cudaMallocManaged(&nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE)));
+        infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
+        gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(SIZE_TYPE)));
+        cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
+        cudaMemAdvise(edgeList, (numEdge) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
+        infile.read((char *) edgeList, sizeof(SIZE_TYPE) * testNumEdge);
         infile.close();
         //preprocessData(nodePointersI, edgeList, testNumNodes, testNumEdge);
 
     } else {
-        nodePointersI = new uint[testNumNodes + 1];
-        infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
-        edgeList = new uint[testNumEdge + 1];
-        infile.read((char *) edgeList, sizeof(uint) * testNumEdge);
+        nodePointersI = new SIZE_TYPE[testNumNodes + 1];
+        infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
+        edgeList = new SIZE_TYPE[testNumEdge + 1];
+        infile.read((char *) edgeList, sizeof(SIZE_TYPE) * testNumEdge);
         infile.close();
     }
     auto endReadGraph = std::chrono::steady_clock::now();
@@ -372,7 +372,7 @@ void testBFS() {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = rand() % testNumNodes;
+        SIZE_TYPE sourceNode = rand() % testNumNodes;
         cout << "sourceNode " << sourceNode << endl;
         if (isUseShare) {
             //timeSum += bfsCaculateInShare(testNumNodes, testNumEdge, nodePointersI, edgeList, 25838548);
@@ -404,17 +404,17 @@ void testBFS() {
 }
 
 
-long bfsCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointersI, uint *edgeList, uint sourceNode) {
+long bfsCaculateInShare(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, SIZE_TYPE *edgeList, SIZE_TYPE sourceNode) {
     auto start = std::chrono::steady_clock::now();
-    uint *degree;
-    uint *value;
-    uint sourceCode = 0;
-    gpuErrorcheck(cudaMallocManaged(&degree, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMallocManaged(&value, testNumNodes * sizeof(uint)));
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE sourceCode = 0;
+    gpuErrorcheck(cudaMallocManaged(&degree, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMallocManaged(&value, testNumNodes * sizeof(SIZE_TYPE)));
 
     auto startPreCaculate = std::chrono::steady_clock::now();
     //caculate degree
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -426,7 +426,7 @@ long bfsCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointersI
     cout << "sourceNode " << sourceNode << " degree " << degree[sourceNode] << endl;
     bool *label;
     gpuErrorcheck(cudaMallocManaged(&label, testNumNodes * sizeof(bool)));
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = false;
         value[i] = UINT_MAX;
     }
@@ -437,12 +437,12 @@ long bfsCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointersI
 
     label[sourceCode] = true;
     value[sourceCode] = 1;
-    uint *activeNodeList;
-    cudaMallocManaged(&activeNodeList, testNumNodes * sizeof(uint));
+    SIZE_TYPE *activeNodeList;
+    cudaMallocManaged(&activeNodeList, testNumNodes * sizeof(SIZE_TYPE));
     //cacaulate the active node And make active node array
-    uint *activeNodeLabelingD;
+    SIZE_TYPE *activeNodeLabelingD;
     gpuErrorcheck(cudaMallocManaged(&activeNodeLabelingD, testNumNodes * sizeof(unsigned int)));
-    uint *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
     gpuErrorcheck(cudaMallocManaged(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     dim3 grid = dim3(56, 1, 1);
     dim3 block = dim3(1024, 1, 1);
@@ -450,11 +450,11 @@ long bfsCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointersI
     setLabeling<<<grid, block>>>(testNumNodes, label, activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling(activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling_prefixsum(activeNodeLabelingPrefixD);
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     auto startProcessing = std::chrono::steady_clock::now();
-    //vector<vector<uint>> visitRecordByIteration;
+    //vector<vector<SIZE_TYPE>> visitRecordByIteration;
     while (activeNodesNum > 0) {
         iter++;
         thrust::exclusive_scan(ptr_labeling, ptr_labeling + testNumNodes, ptr_labeling_prefixsum);
@@ -488,78 +488,78 @@ long bfsCaculateInShare(uint testNumNodes, uint testNumEdge, uint *nodePointersI
 }
 
 long
-bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePointersI, uint *edgeList, uint sourceNode) {
+bfsCaculateInAsyncNoUVMSwap(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, SIZE_TYPE *edgeList, SIZE_TYPE sourceNode) {
     cout << "=========bfsCaculateInAsyncNoUVM========" << endl;
     auto start = std::chrono::steady_clock::now();
     auto startPreCaculate = std::chrono::steady_clock::now();
     //CPU
     long durationRead;
-    uint fragmentNum = testNumEdge / fragment_size;
+    SIZE_TYPE fragmentNum = testNumEdge / fragment_size;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint staticFragmentNum;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
-    uint *staticFragmentToNormalMap;
+    SIZE_TYPE staticFragmentNum;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
+    SIZE_TYPE *staticFragmentToNormalMap;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *staticFragmentData;
-    uint *overloadFragmentData;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *staticFragmentData;
+    SIZE_TYPE *overloadFragmentData;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     /*
      * overloadEdgeList overload edge list in every iteration
      * */
-    uint *overloadEdgeList;
+    SIZE_TYPE *overloadEdgeList;
     FragmentData *fragmentData;
     bool isFromTail = false;
     //GPU
-    uint *staticEdgeListD;
-    uint *overloadEdgeListD;
+    SIZE_TYPE *staticEdgeListD;
+    SIZE_TYPE *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *staticFragmentVisitRecordsD;
-    uint *staticFragmentDataD;
-    uint *canSwapStaticFragmentDataD;
-    uint *canSwapFragmentPrefixSumD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *staticFragmentVisitRecordsD;
+    SIZE_TYPE *staticFragmentDataD;
+    SIZE_TYPE *canSwapStaticFragmentDataD;
+    SIZE_TYPE *canSwapFragmentPrefixSumD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *overloadLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *overloadLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
 
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
     fragmentData = new FragmentData[fragmentNum];
 
     //getMaxPartitionSize(max_partition_size, testNumNodes);
-    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, 0.97, sizeof(uint));
+    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, 0.97, sizeof(SIZE_TYPE));
     staticFragmentNum = max_partition_size / fragment_size;
-    staticFragmentToNormalMap = new uint[staticFragmentNum];
-    staticFragmentData = new uint[staticFragmentNum];
-    overloadFragmentData = new uint[fragmentNum];
+    staticFragmentToNormalMap = new SIZE_TYPE[staticFragmentNum];
+    staticFragmentData = new SIZE_TYPE[staticFragmentNum];
+    overloadFragmentData = new SIZE_TYPE[fragmentNum];
     //caculate degree
-    uint meanDegree = testNumEdge / testNumNodes;
+    SIZE_TYPE meanDegree = testNumEdge / testNumNodes;
     cout << " meanDegree " << meanDegree << endl;
-    uint degree0Sum = 0;
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    SIZE_TYPE degree0Sum = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -567,27 +567,27 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
-    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
+    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
 
     //caculate static staticEdgeListD
-    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(SIZE_TYPE)));
     auto startmove = std::chrono::steady_clock::now();
     gpuErrorcheck(
-            cudaMemcpy(staticEdgeListD, edgeList, max_partition_size * sizeof(uint), cudaMemcpyHostToDevice));
+            cudaMemcpy(staticEdgeListD, edgeList, max_partition_size * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
     auto endMove = std::chrono::steady_clock::now();
     long testDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
             endMove - startmove).count();
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
-    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
+    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
 
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX - 1;
 
-        uint pointStartFragmentIndex = nodePointersI[i] / fragment_size;
-        uint pointEndFragmentIndex =
+        SIZE_TYPE pointStartFragmentIndex = nodePointersI[i] / fragment_size;
+        SIZE_TYPE pointEndFragmentIndex =
                 degree[i] == 0 ? pointStartFragmentIndex : (nodePointersI[i] + degree[i] - 1) / fragment_size;
         if (pointStartFragmentIndex == pointEndFragmentIndex && pointStartFragmentIndex >= 0 &&
             pointStartFragmentIndex < fragmentNum) {
@@ -614,41 +614,41 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
     for (int i = 0; i < staticFragmentNum; i++) {
         fragmentData[i].isIn = true;
     }
-    for (uint i = 0; i < staticFragmentNum; i++) {
+    for (SIZE_TYPE i = 0; i < staticFragmentNum; i++) {
         staticFragmentToNormalMap[i] = i;
     }
-    //uint partOverloadSize = max_partition_size / 2;
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
+    //SIZE_TYPE partOverloadSize = max_partition_size / 2;
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
-    overloadEdgeList = (uint *) malloc(overloadSize * sizeof(uint));
+    overloadEdgeList = (SIZE_TYPE *) malloc(overloadSize * sizeof(SIZE_TYPE));
     if (overloadEdgeList == NULL) {
         cout << "overloadEdgeList is null" << endl;
         return 0;
     }
-    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(uint)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(SIZE_TYPE)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticFragmentVisitRecordsD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapStaticFragmentDataD, staticFragmentNum * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&canSwapFragmentPrefixSumD, staticFragmentNum * sizeof(SIZE_TYPE)));
     thrust::device_ptr<unsigned int> ptr_canSwapFragment(canSwapStaticFragmentDataD);
     thrust::device_ptr<unsigned int> ptr_canSwapFragmentPrefixSum(canSwapFragmentPrefixSumD);
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     gpuErrorcheck(cudaMalloc(&overloadLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -662,10 +662,10 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(overloadLabelingPrefixD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
-    uint overloadEdgeSum = 0;
+    SIZE_TYPE nodeSum = activeNodesNum;
+    SIZE_TYPE overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
     long durationReadCpu = 0;
@@ -696,22 +696,22 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
     auto startProcessing = std::chrono::steady_clock::now();
-    uint cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
-    uint partOverloadSum = 0;
+    SIZE_TYPE cursorStartSwap = isFromTail ? fragmentNum - 1 : staticFragmentNum + 1;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
+    SIZE_TYPE partOverloadSum = 0;
     while (activeNodesNum > 0) {
         startPreGpuProcessing = std::chrono::steady_clock::now();
         iter++;
         cout << "iter " << iter << " activeNodesNum " << activeNodesNum << endl;
         setStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                    isInStaticD);
-        uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+        SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
         if (staticNodeNum > 0) {
             cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
             thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
@@ -719,8 +719,8 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
                                                       activeNodeLabelingPrefixD);
         }
 
-        uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
-        uint overloadEdgeNum = 0;
+        SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+        SIZE_TYPE overloadEdgeNum = 0;
         if (overloadNodeNum > 0) {
             cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
             thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes, ptrOverloadPrefixsum);
@@ -757,11 +757,11 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
                                                                         staticEdgeListD, valueD, isActiveD1, isActiveD2);*/
         if (overloadNodeNum > 0) {
             startCpu = std::chrono::steady_clock::now();
-            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            /*cudaMemcpyAsync(staticActiveNodeList, activeNodeListD, activeNodesNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);*/
-            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);
-            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                             cudaMemcpyDeviceToHost, streamDynamic);
             int threadNum = 20;
             if (overloadNodeNum < 50) {
@@ -791,7 +791,7 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
 
             endReadCpu = std::chrono::steady_clock::now();
             durationReadCpu += std::chrono::duration_cast<std::chrono::milliseconds>(endReadCpu - startCpu).count();
-            uint canSwapFragmentNum;
+            SIZE_TYPE canSwapFragmentNum;
             setFragmentDataOpt<<<grid, block, 0, steamStatic>>>(canSwapStaticFragmentDataD, staticFragmentNum,
                                                                 staticFragmentVisitRecordsD);
             canSwapFragmentNum = thrust::reduce(ptr_canSwapFragment, ptr_canSwapFragment + staticFragmentNum);
@@ -800,7 +800,7 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
                                        ptr_canSwapFragmentPrefixSum);
                 setStaticFragmentData<<<grid, block, 0, steamStatic>>>(staticFragmentNum, canSwapStaticFragmentDataD,
                                                                        canSwapFragmentPrefixSumD, staticFragmentDataD);
-                cudaMemcpyAsync(staticFragmentData, staticFragmentDataD, canSwapFragmentNum * sizeof(uint),
+                cudaMemcpyAsync(staticFragmentData, staticFragmentDataD, canSwapFragmentNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost, steamStatic);
             }
             cudaDeviceSynchronize();
@@ -813,7 +813,7 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
             for (int i = 0; i < partEdgeListInfoArr.size(); i++) {
                 gpuErrorcheck(cudaMemcpy(overloadEdgeListD, overloadEdgeList +
                                                             activeOverloadNodePointers[partEdgeListInfoArr[i].partStartIndex],
-                                         partEdgeListInfoArr[i].partEdgeNums * sizeof(uint),
+                                         partEdgeListInfoArr[i].partEdgeNums * sizeof(SIZE_TYPE),
                                          cudaMemcpyHostToDevice))
                 startOverloadGpuProcessing = std::chrono::steady_clock::now();
                 /*mixDynamicPartLabel<<<grid, block, 0, streamDynamic>>>(partEdgeListInfoArr[i].partActiveNodeNums,
@@ -829,10 +829,10 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
                         activeOverloadNodePointersD);
                 if (canSwapFragmentNum > 0) {
                     startSwap = std::chrono::steady_clock::now();
-                    uint canSwapStaticFragmentIndex = 0;
-                    uint swapSum = 0;
-                    //for (uint i = cursorStartSwap; i > 0; i--) {
-                    for (uint i = cursorStartSwap; i < fragmentNum; i++) {
+                    SIZE_TYPE canSwapStaticFragmentIndex = 0;
+                    SIZE_TYPE swapSum = 0;
+                    //for (SIZE_TYPE i = cursorStartSwap; i > 0; i--) {
+                    for (SIZE_TYPE i = cursorStartSwap; i < fragmentNum; i++) {
                         if (cudaSuccess == cudaStreamQuery(streamDynamic) ||
                             canSwapStaticFragmentIndex >= canSwapFragmentNum) {
                             if (i < fragmentNum) {
@@ -849,22 +849,22 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
                             const FragmentData swapFragmentData = fragmentData[i];
 
                             if (!swapFragmentData.isVisit && !swapFragmentData.isIn && swapFragmentData.vertexNum > 0) {
-                                uint swapStaticFragmentIndex = staticFragmentData[canSwapStaticFragmentIndex++];
-                                uint beSwappedFragmentIndex = staticFragmentToNormalMap[swapStaticFragmentIndex];
+                                SIZE_TYPE swapStaticFragmentIndex = staticFragmentData[canSwapStaticFragmentIndex++];
+                                SIZE_TYPE beSwappedFragmentIndex = staticFragmentToNormalMap[swapStaticFragmentIndex];
                                 fragmentData[beSwappedFragmentIndex].isVisit = true;
                                 fragmentData[beSwappedFragmentIndex].isIn = false;
                                 FragmentData beSwappedFragment = fragmentData[beSwappedFragmentIndex];
-                                uint moveFrom = testNumEdge;
-                                uint moveTo = testNumEdge;
-                                uint moveNum = testNumEdge;
+                                SIZE_TYPE moveFrom = testNumEdge;
+                                SIZE_TYPE moveTo = testNumEdge;
+                                SIZE_TYPE moveNum = testNumEdge;
                                 if (beSwappedFragment.vertexNum > 0 && beSwappedFragmentIndex > 0 &&
                                     beSwappedFragmentIndex < fragmentNum) {
-                                    for (uint j = beSwappedFragment.startVertex - 1;
+                                    for (SIZE_TYPE j = beSwappedFragment.startVertex - 1;
                                          j < beSwappedFragment.startVertex + beSwappedFragment.vertexNum + 1 &&
                                          j < testNumNodes; j++) {
                                         isInStatic[j] = false;
                                     }
-                                    for (uint j = swapFragmentData.startVertex;
+                                    for (SIZE_TYPE j = swapFragmentData.startVertex;
                                          j < swapFragmentData.startVertex + swapFragmentData.vertexNum; j++) {
                                         isInStatic[j] = true;
                                         staticNodePointer[j] =
@@ -876,7 +876,7 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
                                     moveNum = nodePointersI[swapFragmentData.startVertex + swapFragmentData.vertexNum] -
                                               nodePointersI[swapFragmentData.startVertex];
                                     cudaMemcpyAsync(staticEdgeListD + moveTo, edgeList + moveFrom,
-                                                    moveNum * sizeof(uint),
+                                                    moveNum * sizeof(SIZE_TYPE),
                                                     cudaMemcpyHostToDevice, steamStatic);
                                     cudaMemcpyAsync(isInStaticD + beSwappedFragment.startVertex - 1,
                                                     isInStatic + beSwappedFragment.startVertex - 1,
@@ -889,7 +889,7 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
 
                                     cudaMemcpyAsync(staticNodePointerD + swapFragmentData.startVertex,
                                                     staticNodePointer + swapFragmentData.startVertex,
-                                                    swapFragmentData.vertexNum * sizeof(uint), cudaMemcpyHostToDevice,
+                                                    swapFragmentData.vertexNum * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice,
                                                     steamStatic);
                                     staticFragmentToNormalMap[swapStaticFragmentIndex] = i;
                                     fragmentData[i].isIn = true;
@@ -975,7 +975,7 @@ bfsCaculateInAsyncNoUVMSwap(uint testNumNodes, uint testNumEdge, uint *nodePoint
 }
 
 long
-bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI, uint *edgeList, uint sourceNode,
+bfsCaculateInAsyncNoUVM(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, SIZE_TYPE *edgeList, SIZE_TYPE sourceNode,
                         float adviseK) {
     cout << "=========bfsCaculateInAsyncNoUVM========" << endl;
     ulong edgeIterationMax = 0;
@@ -986,56 +986,56 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
     ulong transferSum = 0;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     /*
      * overloadEdgeList overload edge list in every iteration
      * */
-    uint *overloadEdgeList;
+    SIZE_TYPE *overloadEdgeList;
     bool isFromTail = false;
     //GPU
-    uint *staticEdgeListD;
-    uint *overloadEdgeListD;
+    SIZE_TYPE *staticEdgeListD;
+    SIZE_TYPE *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *overloadLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *overloadLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
 
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
 
     //getMaxPartitionSize(max_partition_size, testNumNodes);
-    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(uint), testNumEdge, 15);
+    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(SIZE_TYPE), testNumEdge, 15);
     //caculate degree
-    uint meanDegree = testNumEdge / testNumNodes;
+    SIZE_TYPE meanDegree = testNumEdge / testNumNodes;
     cout << " meanDegree " << meanDegree << endl;
-    uint degree0Sum = 0;
+    SIZE_TYPE degree0Sum = 0;
 
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -1043,23 +1043,23 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
-    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
+    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
 
     //caculate static staticEdgeListD
-    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(SIZE_TYPE)));
     auto startmove = std::chrono::steady_clock::now();
     gpuErrorcheck(
-            cudaMemcpy(staticEdgeListD, edgeList, max_partition_size * sizeof(uint), cudaMemcpyHostToDevice));
+            cudaMemcpy(staticEdgeListD, edgeList, max_partition_size * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
     auto endMove = std::chrono::steady_clock::now();
     long testDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
             endMove - startmove).count();
     cout << "move duration " << testDuration << endl;
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
-    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
+    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
 
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX - 1;
 
@@ -1075,32 +1075,32 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
     cudaMemcpy(isInStaticD, isInStatic, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
     cout << "max_partition_size: " << max_partition_size << "  maxStaticNode: " << maxStaticNode << endl;
 
-    //uint partOverloadSize = max_partition_size / 2;
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
+    //SIZE_TYPE partOverloadSize = max_partition_size / 2;
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
-    overloadEdgeList = (uint *) malloc(overloadSize * sizeof(uint));
+    overloadEdgeList = (SIZE_TYPE *) malloc(overloadSize * sizeof(SIZE_TYPE));
     if (overloadEdgeList == NULL) {
         cout << "overloadEdgeList is null" << endl;
         return 0;
     }
-    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(uint)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(SIZE_TYPE)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     gpuErrorcheck(cudaMalloc(&overloadLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -1114,9 +1114,9 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(overloadLabelingPrefixD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     ulong overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
@@ -1148,21 +1148,21 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
     auto startProcessing = std::chrono::steady_clock::now();
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
-    uint partOverloadSum = 0;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
+    SIZE_TYPE partOverloadSum = 0;
     while (activeNodesNum > 0) {
         startPreGpuProcessing = std::chrono::steady_clock::now();
         iter++;
         //cout << "iter " << iter << " activeNodesNum " << activeNodesNum << endl;
         setStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                    isInStaticD);
-        uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+        SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
         if (staticNodeNum > 0) {
             //cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
             thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
@@ -1170,8 +1170,8 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
                                                       activeNodeLabelingPrefixD);
         }
 
-        uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
-        uint overloadEdgeNum = 0;
+        SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+        SIZE_TYPE overloadEdgeNum = 0;
         if (overloadNodeNum > 0) {
             //cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
             thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes, ptrOverloadPrefixsum);
@@ -1203,9 +1203,9 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
         //cudaDeviceSynchronize();
         if (overloadNodeNum > 0) {
             startCpu = std::chrono::steady_clock::now();
-            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);
-            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                             cudaMemcpyDeviceToHost, streamDynamic);
             int threadNum = 20;
             if (overloadNodeNum < 50) {
@@ -1245,7 +1245,7 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
                 startMemoryTraverse = std::chrono::steady_clock::now();
                 gpuErrorcheck(cudaMemcpy(overloadEdgeListD, overloadEdgeList +
                                                             activeOverloadNodePointers[partEdgeListInfoArr[i].partStartIndex],
-                                         partEdgeListInfoArr[i].partEdgeNums * sizeof(uint),
+                                         partEdgeListInfoArr[i].partEdgeNums * sizeof(SIZE_TYPE),
                                          cudaMemcpyHostToDevice))
                 transferSum += partEdgeListInfoArr[i].partEdgeNums;
                 endMemoryTraverse = std::chrono::steady_clock::now();
@@ -1333,8 +1333,8 @@ bfsCaculateInAsyncNoUVM(uint testNumNodes, uint testNumEdge, uint *nodePointersI
 }
 
 long
-bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *nodePointersI, uint *edgeList,
-                                   uint sourceNode,
+bfsCaculateInAsyncNoUVMVisitRecord(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, SIZE_TYPE *edgeList,
+                                   SIZE_TYPE sourceNode,
                                    float adviseK) {
     cout << "=========bfsCaculateInAsyncNoUVM========" << endl;
     ulong edgeIterationMax = 0;
@@ -1345,60 +1345,60 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
     ulong transferSum = 0;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     /*
      * overloadEdgeList overload edge list in every iteration
      * */
-    uint *overloadEdgeList;
+    SIZE_TYPE *overloadEdgeList;
     bool isFromTail = false;
     //GPU
-    uint *staticEdgeListD;
-    uint *overloadEdgeListD;
+    SIZE_TYPE *staticEdgeListD;
+    SIZE_TYPE *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *overloadLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *overloadLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
 
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
-    uint *vertexVisitRecord;
-    uint *vertexVisitRecordD;
-    vertexVisitRecord = new uint[testNumNodes];
-    cudaMalloc(&vertexVisitRecordD, testNumNodes * sizeof(uint));
-    cudaMemset(vertexVisitRecordD, 0, testNumNodes * sizeof(uint));
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
+    SIZE_TYPE *vertexVisitRecord;
+    SIZE_TYPE *vertexVisitRecordD;
+    vertexVisitRecord = new SIZE_TYPE[testNumNodes];
+    cudaMalloc(&vertexVisitRecordD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMemset(vertexVisitRecordD, 0, testNumNodes * sizeof(SIZE_TYPE));
 
     //getMaxPartitionSize(max_partition_size, testNumNodes);
-    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(uint), testNumEdge, 15);
+    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(SIZE_TYPE), testNumEdge, 15);
     //caculate degree
-    uint meanDegree = testNumEdge / testNumNodes;
+    SIZE_TYPE meanDegree = testNumEdge / testNumNodes;
     cout << " meanDegree " << meanDegree << endl;
-    uint degree0Sum = 0;
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    SIZE_TYPE degree0Sum = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         if (nodePointersI[i] > testNumEdge) {
             cout << i << "   " << nodePointersI[i] << endl;
             break;
@@ -1406,23 +1406,23 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
-    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
+    memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
 
     //caculate static staticEdgeListD
-    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(SIZE_TYPE)));
     auto startmove = std::chrono::steady_clock::now();
     gpuErrorcheck(
-            cudaMemcpy(staticEdgeListD, edgeList, max_partition_size * sizeof(uint), cudaMemcpyHostToDevice));
+            cudaMemcpy(staticEdgeListD, edgeList, max_partition_size * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
     auto endMove = std::chrono::steady_clock::now();
     long testDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
             endMove - startmove).count();
     cout << "move duration " << testDuration << endl;
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
-    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
+    gpuErrorcheck(cudaMemcpy(staticNodePointerD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
 
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX - 1;
 
@@ -1438,32 +1438,32 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
     cudaMemcpy(isInStaticD, isInStatic, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
     cout << "max_partition_size: " << max_partition_size << "  maxStaticNode: " << maxStaticNode << endl;
 
-    //uint partOverloadSize = max_partition_size / 2;
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
+    //SIZE_TYPE partOverloadSize = max_partition_size / 2;
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - nodePointersI[maxStaticNode + 1];
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
-    overloadEdgeList = (uint *) malloc(overloadSize * sizeof(uint));
+    overloadEdgeList = (SIZE_TYPE *) malloc(overloadSize * sizeof(SIZE_TYPE));
     if (overloadEdgeList == NULL) {
         cout << "overloadEdgeList is null" << endl;
         return 0;
     }
-    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(uint)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(SIZE_TYPE)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     gpuErrorcheck(cudaMalloc(&overloadLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -1477,9 +1477,9 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(overloadLabelingPrefixD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     ulong overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
@@ -1511,21 +1511,21 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
     auto startProcessing = std::chrono::steady_clock::now();
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
-    uint partOverloadSum = 0;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
+    SIZE_TYPE partOverloadSum = 0;
     while (activeNodesNum > 0) {
         startPreGpuProcessing = std::chrono::steady_clock::now();
         iter++;
         //cout << "iter " << iter << " activeNodesNum " << activeNodesNum << endl;
         setStaticAndOverloadLabelAndRecord<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                             isInStaticD, vertexVisitRecordD);
-        uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+        SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
         if (staticNodeNum > 0) {
             //cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
             thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
@@ -1533,8 +1533,8 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
                                                       activeNodeLabelingPrefixD);
         }
 
-        uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
-        uint overloadEdgeNum = 0;
+        SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+        SIZE_TYPE overloadEdgeNum = 0;
         if (overloadNodeNum > 0) {
             //cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
             thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes, ptrOverloadPrefixsum);
@@ -1566,9 +1566,9 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
         cudaDeviceSynchronize();
         if (overloadNodeNum > 0) {
             startCpu = std::chrono::steady_clock::now();
-            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint), cudaMemcpyDeviceToHost,
+            cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost,
                             streamDynamic);
-            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+            cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                             cudaMemcpyDeviceToHost, streamDynamic);
             int threadNum = 20;
             if (overloadNodeNum < 50) {
@@ -1608,7 +1608,7 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
             for (int i = 0; i < partEdgeListInfoArr.size(); i++) {
                 gpuErrorcheck(cudaMemcpy(overloadEdgeListD, overloadEdgeList +
                                                             activeOverloadNodePointers[partEdgeListInfoArr[i].partStartIndex],
-                                         partEdgeListInfoArr[i].partEdgeNums * sizeof(uint),
+                                         partEdgeListInfoArr[i].partEdgeNums * sizeof(SIZE_TYPE),
                                          cudaMemcpyHostToDevice))
                 transferSum += partEdgeListInfoArr[i].partEdgeNums;
                 startOverloadGpuProcessing = std::chrono::steady_clock::now();
@@ -1649,15 +1649,15 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
     auto endRead = std::chrono::steady_clock::now();
     durationRead = std::chrono::duration_cast<std::chrono::milliseconds>(endRead - startProcessing).count();
     transferSum += max_partition_size;
-    cudaMemcpy(vertexVisitRecord, vertexVisitRecordD, testNumNodes * sizeof(uint), cudaMemcpyDeviceToHost);
-    uint partNum = 50;
-    uint partSize = testNumEdge / partNum;
-    vector<uint> partVistRecordList(partNum + 1);
-    uint partSizeCursor = 0;
-    for (uint i = 0; i < testNumNodes; i++) {
-        uint edgeStartIndex = nodePointersI[i];
-        uint edgeEndIndex = nodePointersI[i] + degree[i];
-        uint maxPartIndex = partSizeCursor * partSize + partSize;
+    cudaMemcpy(vertexVisitRecord, vertexVisitRecordD, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
+    SIZE_TYPE partNum = 50;
+    SIZE_TYPE partSize = testNumEdge / partNum;
+    vector<SIZE_TYPE> partVistRecordList(partNum + 1);
+    SIZE_TYPE partSizeCursor = 0;
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
+        SIZE_TYPE edgeStartIndex = nodePointersI[i];
+        SIZE_TYPE edgeEndIndex = nodePointersI[i] + degree[i];
+        SIZE_TYPE maxPartIndex = partSizeCursor * partSize + partSize;
 
         if (edgeStartIndex < maxPartIndex && edgeEndIndex < maxPartIndex) {
             partVistRecordList[partSizeCursor] += vertexVisitRecord[i] * degree[i];
@@ -1670,10 +1670,10 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
             partVistRecordList[partSizeCursor] += vertexVisitRecord[i] * degree[i];
         }
     }
-    for (uint i = 0; i < partNum + 1; i++) {
+    for (SIZE_TYPE i = 0; i < partNum + 1; i++) {
         cout << "part " << i << " is " << partVistRecordList[i] << endl;
     }
-    for (uint i = 0; i < partNum + 1; i++) {
+    for (SIZE_TYPE i = 0; i < partNum + 1; i++) {
         cout << partVistRecordList[i] << "\t";
     }
     cout << "iterationSum " << iter << endl;
@@ -1723,25 +1723,25 @@ bfsCaculateInAsyncNoUVMVisitRecord(uint testNumNodes, uint testNumEdge, uint *no
 
 
 void bfsShareTrace(string bfsPath, int sampleSourceNode) {
-    uint testNumNodes = 0;
+    SIZE_TYPE testNumNodes = 0;
     ulong testNumEdge = 0;
-    uint *nodePointersI;
-    uint *edgeList;
+    SIZE_TYPE *nodePointersI;
+    SIZE_TYPE *edgeList;
     bool isUseShare = true;
 
     auto startReadGraph = std::chrono::steady_clock::now();
     ifstream infile(bfsPath, ios::in | ios::binary);
-    infile.read((char *) &testNumNodes, sizeof(uint));
-    uint numEdge = 0;
-    infile.read((char *) &numEdge, sizeof(uint));
+    infile.read((char *) &testNumNodes, sizeof(SIZE_TYPE));
+    SIZE_TYPE numEdge = 0;
+    infile.read((char *) &numEdge, sizeof(SIZE_TYPE));
     testNumEdge = numEdge;
     cout << "vertex num: " << testNumNodes << " edge num: " << testNumEdge << endl;
-    nodePointersI = new uint[testNumNodes];
-    infile.read((char *) nodePointersI, sizeof(uint) * testNumNodes);
-    gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(uint)));
-    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
-    cudaMemAdvise(edgeList, (numEdge) * sizeof(uint), cudaMemAdviseSetReadMostly, 0);
-    infile.read((char *) edgeList, sizeof(uint) * testNumEdge);
+    nodePointersI = new SIZE_TYPE[testNumNodes];
+    infile.read((char *) nodePointersI, sizeof(SIZE_TYPE) * testNumNodes);
+    gpuErrorcheck(cudaMallocManaged(&edgeList, (numEdge) * sizeof(SIZE_TYPE)));
+    cudaMemAdvise(nodePointersI, (testNumNodes + 1) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
+    cudaMemAdvise(edgeList, (numEdge) * sizeof(SIZE_TYPE), cudaMemAdviseSetReadMostly, 0);
+    infile.read((char *) edgeList, sizeof(SIZE_TYPE) * testNumEdge);
     infile.close();
     //preprocessData(nodePointersI, edgeList, testNumNodes, testNumEdge);
     auto endReadGraph = std::chrono::steady_clock::now();
@@ -1751,7 +1751,7 @@ void bfsShareTrace(string bfsPath, int sampleSourceNode) {
     int testTimes = 1;
     long timeSum = 0;
     for (int i = 0; i < testTimes; i++) {
-        uint sourceNode = rand() % testNumNodes;
+        SIZE_TYPE sourceNode = rand() % testNumNodes;
         sourceNode = sampleSourceNode;
         cout << "sourceNode " << sourceNode << endl;
         timeSum += bfsCaculateInShareTrace(testNumNodes, testNumEdge, nodePointersI, edgeList, sourceNode);
@@ -1762,45 +1762,45 @@ void bfsShareTrace(string bfsPath, int sampleSourceNode) {
 
 
 long
-bfsCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePointersI, uint *edgeList, uint sourceNode) {
+bfsCaculateInShareTrace(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, SIZE_TYPE *edgeList, SIZE_TYPE sourceNode) {
     auto start = std::chrono::steady_clock::now();
-    uint *degree = new uint[testNumNodes];
-    uint *value = new uint[testNumNodes];
-    uint sourceCode = 0;
+    SIZE_TYPE *degree = new SIZE_TYPE[testNumNodes];
+    SIZE_TYPE *value = new SIZE_TYPE[testNumNodes];
+    SIZE_TYPE sourceCode = 0;
 
     auto startPreCaculate = std::chrono::steady_clock::now();
-    for (uint i = 0; i < testNumNodes - 1; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes - 1; i++) {
         degree[i] = nodePointersI[i + 1] - nodePointersI[i];
     }
 
     degree[testNumNodes - 1] = testNumEdge - nodePointersI[testNumNodes - 1];
     sourceCode = sourceNode;
     bool *label = new bool[testNumNodes];
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = false;
         value[i] = UINT_MAX;
     }
 
     label[sourceCode] = true;
     value[sourceCode] = 1;
-    uint *activeNodeListD;
-    uint *degreeD;
-    uint *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *degreeD;
+    SIZE_TYPE *valueD;
     bool *labelD;
-    uint *nodePointersD;
-    cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint));
-    cudaMalloc(&nodePointersD, testNumNodes * sizeof(uint));
-    cudaMalloc(&degreeD, testNumNodes * sizeof(uint));
-    cudaMalloc(&valueD, testNumNodes * sizeof(uint));
+    SIZE_TYPE *nodePointersD;
+    cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&nodePointersD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE));
+    cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE));
     cudaMalloc(&labelD, testNumNodes * sizeof(bool));
-    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
-    cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
+    cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+    cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     cudaMemcpy(labelD, label, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
-    cudaMemcpy(nodePointersD, nodePointersI, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice);
+    cudaMemcpy(nodePointersD, nodePointersI, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     //cacaulate the active node And make active node array
-    uint *activeNodeLabelingD;
+    SIZE_TYPE *activeNodeLabelingD;
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingD, testNumNodes * sizeof(unsigned int)));
-    uint *activeNodeLabelingPrefixD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     dim3 grid = dim3(56, 1, 1);
     dim3 block = dim3(1024, 1, 1);
@@ -1813,9 +1813,9 @@ bfsCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePointersI
     setLabeling<<<grid, block>>>(testNumNodes, labelD, activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling(activeNodeLabelingD);
     thrust::device_ptr<unsigned int> ptr_labeling_prefixsum(activeNodeLabelingPrefixD);
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     auto startProcessing = std::chrono::steady_clock::now();
     while (activeNodesNum > 0) {
         iter++;
@@ -1826,7 +1826,7 @@ bfsCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePointersI
         cudaDeviceSynchronize();
         gpuErrorcheck(cudaPeekAtLastError());
         long temp = 0;
-        for (uint j = 0; j < testNumEdge; j++) {
+        for (SIZE_TYPE j = 0; j < testNumEdge; j++) {
             temp += edgeList[j] % 10;
         }
         cout << "iter " << iter << " " << temp;
@@ -1848,7 +1848,7 @@ bfsCaculateInShareTrace(uint testNumNodes, uint testNumEdge, uint *nodePointersI
 }
 
 long
-bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePointersI, uint *edgeList, uint sourceNode,
+bfsCaculateInAsyncNoUVMRandom(SIZE_TYPE testNumNodes, SIZE_TYPE testNumEdge, SIZE_TYPE *nodePointersI, SIZE_TYPE *edgeList, SIZE_TYPE sourceNode,
                               float adviseK) {
     cout << "=========bfsCaculateInAsyncNoUVM========" << endl;
     ulong edgeIterationMax = 0;
@@ -1859,57 +1859,57 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
     ulong transferSum = 0;
     unsigned long max_partition_size;
     unsigned long total_gpu_size;
-    uint maxStaticNode = 0;
-    uint *degree;
-    uint *value;
-    uint *label;
+    SIZE_TYPE maxStaticNode = 0;
+    SIZE_TYPE *degree;
+    SIZE_TYPE *value;
+    SIZE_TYPE *label;
     bool *isInStatic;
-    uint *overloadNodeList;
-    uint *staticNodePointer;
-    uint *activeNodeList;
-    uint *activeOverloadNodePointers;
+    SIZE_TYPE *overloadNodeList;
+    SIZE_TYPE *staticNodePointer;
+    SIZE_TYPE *activeNodeList;
+    SIZE_TYPE *activeOverloadNodePointers;
     vector<PartEdgeListInfo> partEdgeListInfoArr;
     /*
      * overloadEdgeList overload edge list in every iteration
      * */
-    uint *overloadEdgeList;
+    SIZE_TYPE *overloadEdgeList;
     bool isFromTail = false;
     //GPU
-    uint *staticEdgeListD;
-    uint *overloadEdgeListD;
+    SIZE_TYPE *staticEdgeListD;
+    SIZE_TYPE *overloadEdgeListD;
     bool *isInStaticD;
-    uint *overloadNodeListD;
-    uint *staticNodePointerD;
-    uint *degreeD;
+    SIZE_TYPE *overloadNodeListD;
+    SIZE_TYPE *staticNodePointerD;
+    SIZE_TYPE *degreeD;
     // async need two labels
-    uint *isActiveD1;
-    uint *isStaticActive;
-    uint *isOverloadActive;
-    uint *valueD;
-    uint *activeNodeListD;
-    uint *activeNodeLabelingPrefixD;
-    uint *overloadLabelingPrefixD;
-    uint *activeOverloadNodePointersD;
-    uint *activeOverloadDegreeD;
+    SIZE_TYPE *isActiveD1;
+    SIZE_TYPE *isStaticActive;
+    SIZE_TYPE *isOverloadActive;
+    SIZE_TYPE *valueD;
+    SIZE_TYPE *activeNodeListD;
+    SIZE_TYPE *activeNodeLabelingPrefixD;
+    SIZE_TYPE *overloadLabelingPrefixD;
+    SIZE_TYPE *activeOverloadNodePointersD;
+    SIZE_TYPE *activeOverloadDegreeD;
 
-    degree = new uint[testNumNodes];
-    value = new uint[testNumNodes];
-    label = new uint[testNumNodes];
+    degree = new SIZE_TYPE[testNumNodes];
+    value = new SIZE_TYPE[testNumNodes];
+    label = new SIZE_TYPE[testNumNodes];
     isInStatic = new bool[testNumNodes];
-    overloadNodeList = new uint[testNumNodes];
-    staticNodePointer = new uint[testNumNodes];
-    activeNodeList = new uint[testNumNodes];
-    activeOverloadNodePointers = new uint[testNumNodes];
+    overloadNodeList = new SIZE_TYPE[testNumNodes];
+    staticNodePointer = new SIZE_TYPE[testNumNodes];
+    activeNodeList = new SIZE_TYPE[testNumNodes];
+    activeOverloadNodePointers = new SIZE_TYPE[testNumNodes];
 
     //getMaxPartitionSize(max_partition_size, testNumNodes);
-    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(uint), testNumEdge, 15);
+    getMaxPartitionSize(max_partition_size, total_gpu_size, testNumNodes, adviseK, sizeof(SIZE_TYPE), testNumEdge, 15);
     calculateDegree(testNumNodes, nodePointersI, testNumEdge, degree);
-    //memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(uint));
-    uint edgesInStatic = 0;
+    //memcpy(staticNodePointer, nodePointersI, testNumNodes * sizeof(SIZE_TYPE));
+    SIZE_TYPE edgesInStatic = 0;
     float startRate = (1 - (float) max_partition_size / (float) testNumEdge) / 2;
-    uint startIndex = (float) testNumNodes * startRate;
-    /*uint tempStaticSum = 0;
-    for (uint i = testNumNodes - 1; i >= 0; i--) {
+    SIZE_TYPE startIndex = (float) testNumNodes * startRate;
+    /*SIZE_TYPE tempStaticSum = 0;
+    for (SIZE_TYPE i = testNumNodes - 1; i >= 0; i--) {
         tempStaticSum += degree[i];
         if (tempStaticSum > max_partition_size) {
             startIndex = i;
@@ -1920,7 +1920,7 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
     if (nodePointersI[startIndex] + max_partition_size > testNumEdge) {
         startIndex = (float) testNumNodes * 0.1f;
     }
-    for (uint i = 0; i < testNumNodes; i++) {
+    for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
         label[i] = 0;
         value[i] = UINT_MAX - 1;
         if (i >= startIndex && nodePointersI[i] < nodePointersI[startIndex] + max_partition_size - degree[i]) {
@@ -1937,10 +1937,10 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
     label[sourceNode] = 1;
     value[sourceNode] = 1;
 
-    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&staticEdgeListD, max_partition_size * sizeof(SIZE_TYPE)));
     auto startmove = std::chrono::steady_clock::now();
     gpuErrorcheck(
-            cudaMemcpy(staticEdgeListD, edgeList + nodePointersI[startIndex], max_partition_size * sizeof(uint),
+            cudaMemcpy(staticEdgeListD, edgeList + nodePointersI[startIndex], max_partition_size * sizeof(SIZE_TYPE),
                        cudaMemcpyHostToDevice));
     auto endMove = std::chrono::steady_clock::now();
     long testDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1948,41 +1948,41 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
     cout << "move duration " << testDuration << endl;
 
     gpuErrorcheck(cudaMalloc(&isInStaticD, testNumNodes * sizeof(bool)))
-    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(uint)))
+    gpuErrorcheck(cudaMalloc(&overloadNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&staticNodePointerD, testNumNodes * sizeof(SIZE_TYPE)))
     gpuErrorcheck(
-            cudaMemcpy(staticNodePointerD, staticNodePointer, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
+            cudaMemcpy(staticNodePointerD, staticNodePointer, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
     cudaMemcpy(isInStaticD, isInStatic, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
     label[sourceNode] = 1;
     value[sourceNode] = 1;
     cout << "max_partition_size: " << max_partition_size << "  maxStaticNode: " << maxStaticNode << endl;
 
-    //uint partOverloadSize = max_partition_size / 2;
-    uint partOverloadSize = total_gpu_size - max_partition_size;
-    uint overloadSize = testNumEdge - edgesInStatic;
+    //SIZE_TYPE partOverloadSize = max_partition_size / 2;
+    SIZE_TYPE partOverloadSize = total_gpu_size - max_partition_size;
+    SIZE_TYPE overloadSize = testNumEdge - edgesInStatic;
     cout << " partOverloadSize " << partOverloadSize << " overloadSize " << overloadSize << endl;
-    overloadEdgeList = (uint *) malloc(overloadSize * sizeof(uint));
+    overloadEdgeList = (SIZE_TYPE *) malloc(overloadSize * sizeof(SIZE_TYPE));
     if (overloadEdgeList == NULL) {
         cout << "overloadEdgeList is null" << endl;
         return 0;
     }
-    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(uint)));
-    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&overloadEdgeListD, partOverloadSize * sizeof(SIZE_TYPE)));
+    //gpuErrorcheck(cudaMallocManaged(&edgeListOverloadManage, overloadSize * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&degreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isActiveD1, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isStaticActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&isOverloadActive, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&valueD, testNumNodes * sizeof(SIZE_TYPE)));
     gpuErrorcheck(cudaMalloc(&activeNodeLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
     gpuErrorcheck(cudaMalloc(&overloadLabelingPrefixD, testNumNodes * sizeof(unsigned int)));
-    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+    gpuErrorcheck(cudaMalloc(&activeNodeListD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadNodePointersD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMalloc(&activeOverloadDegreeD, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemcpy(degreeD, degree, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+    gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+    gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
 
     //cacaulate the active node And make active node array
     dim3 grid = dim3(56, 1, 1);
@@ -1996,9 +1996,9 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
     thrust::device_ptr<unsigned int> ptrOverloadDegree(activeOverloadDegreeD);
     thrust::device_ptr<unsigned int> ptrOverloadPrefixsum(overloadLabelingPrefixD);
 
-    uint activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
+    SIZE_TYPE activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
     int iter = 0;
-    uint nodeSum = activeNodesNum;
+    SIZE_TYPE nodeSum = activeNodesNum;
     ulong overloadEdgeSum = 0;
     auto startCpu = std::chrono::steady_clock::now();
     auto endReadCpu = std::chrono::steady_clock::now();
@@ -2029,30 +2029,30 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
     auto startMemoryTraverse = std::chrono::steady_clock::now();
     auto endMemoryTraverse = std::chrono::steady_clock::now();
     long durationMemoryTraverse = 0;
-    //uint cursorStartSwap = staticFragmentNum + 1;
-    uint swapValidNodeSum = 0;
-    uint swapValidEdgeSum = 0;
-    uint swapNotValidNodeSum = 0;
-    uint swapNotValidEdgeSum = 0;
-    uint visitEdgeSum = 0;
-    uint swapInEdgeSum = 0;
-    uint partOverloadSum = 0;
+    //SIZE_TYPE cursorStartSwap = staticFragmentNum + 1;
+    SIZE_TYPE swapValidNodeSum = 0;
+    SIZE_TYPE swapValidEdgeSum = 0;
+    SIZE_TYPE swapNotValidNodeSum = 0;
+    SIZE_TYPE swapNotValidEdgeSum = 0;
+    SIZE_TYPE visitEdgeSum = 0;
+    SIZE_TYPE swapInEdgeSum = 0;
+    SIZE_TYPE partOverloadSum = 0;
 
     long TIME = 0;
     int testTimes = 1;
     for (int testIndex = 0; testIndex < testTimes; testIndex++) {
 
-        for (uint i = 0; i < testNumNodes; i++) {
+        for (SIZE_TYPE i = 0; i < testNumNodes; i++) {
             label[i] = 0;
             value[i] = UINT_MAX - 1;
         }
         label[sourceNode] = 1;
         value[sourceNode] = 1;
         cudaMemcpy(isInStaticD, isInStatic, testNumNodes * sizeof(bool), cudaMemcpyHostToDevice);
-        gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-        gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(uint), cudaMemcpyHostToDevice));
-        gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(uint)));
-        gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(uint)));
+        gpuErrorcheck(cudaMemcpy(valueD, value, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+        gpuErrorcheck(cudaMemcpy(isActiveD1, label, testNumNodes * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
+        gpuErrorcheck(cudaMemset(isStaticActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
+        gpuErrorcheck(cudaMemset(isOverloadActive, 0, testNumNodes * sizeof(SIZE_TYPE)));
         activeNodesNum = thrust::reduce(ptr_labeling, ptr_labeling + testNumNodes);
         iter = 0;
 
@@ -2066,7 +2066,7 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
             cout << "iter " << iter << " activeNodesNum " << activeNodesNum << endl;
             setStaticAndOverloadLabel<<<grid, block>>>(testNumNodes, isActiveD1, isStaticActive, isOverloadActive,
                                                        isInStaticD);
-            uint staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
+            SIZE_TYPE staticNodeNum = thrust::reduce(ptr_labeling_static, ptr_labeling_static + testNumNodes);
             if (staticNodeNum > 0) {
                 cout << "iter " << iter << " staticNodeNum " << staticNodeNum << endl;
                 thrust::exclusive_scan(ptr_labeling_static, ptr_labeling_static + testNumNodes, ptr_labeling_prefixsum);
@@ -2074,8 +2074,8 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
                                                           activeNodeLabelingPrefixD);
             }
 
-            uint overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
-            uint overloadEdgeNum = 0;
+            SIZE_TYPE overloadNodeNum = thrust::reduce(ptr_labeling_overload, ptr_labeling_overload + testNumNodes);
+            SIZE_TYPE overloadEdgeNum = 0;
             if (overloadNodeNum > 0) {
                 cout << "iter " << iter << " overloadNodeNum " << overloadNodeNum << endl;
                 thrust::exclusive_scan(ptr_labeling_overload, ptr_labeling_overload + testNumNodes,
@@ -2109,10 +2109,10 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
             //cudaDeviceSynchronize();
             if (overloadNodeNum > 0) {
                 startCpu = std::chrono::steady_clock::now();
-                cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(overloadNodeList, overloadNodeListD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost,
                                 streamDynamic);
-                cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(uint),
+                cudaMemcpyAsync(activeOverloadNodePointers, activeOverloadNodePointersD, overloadNodeNum * sizeof(SIZE_TYPE),
                                 cudaMemcpyDeviceToHost, streamDynamic);
                 int threadNum = 20;
                 if (overloadNodeNum < 50) {
@@ -2152,7 +2152,7 @@ bfsCaculateInAsyncNoUVMRandom(uint testNumNodes, uint testNumEdge, uint *nodePoi
                     startMemoryTraverse = std::chrono::steady_clock::now();
                     gpuErrorcheck(cudaMemcpy(overloadEdgeListD, overloadEdgeList +
                                                                 activeOverloadNodePointers[partEdgeListInfoArr[i].partStartIndex],
-                                             partEdgeListInfoArr[i].partEdgeNums * sizeof(uint),
+                                             partEdgeListInfoArr[i].partEdgeNums * sizeof(SIZE_TYPE),
                                              cudaMemcpyHostToDevice))
                     transferSum += partEdgeListInfoArr[i].partEdgeNums;
                     endMemoryTraverse = std::chrono::steady_clock::now();

@@ -17,17 +17,17 @@
 #pragma once
 struct StaticRegionInfo
 {
-    uint max_node;
-    uint max_partion_size;
+    SIZE_TYPE max_node;
+    SIZE_TYPE max_partion_size;
 };
 EDGE_POINTER_TYPE vertexArrSize, edgeArrSize;
 
-StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize, EDGE_POINTER_TYPE vertexArrSize, EDGE_POINTER_TYPE* nodePointers, uint*degree,
+StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize, EDGE_POINTER_TYPE vertexArrSize, EDGE_POINTER_TYPE* nodePointers, SIZE_TYPE*degree,
                        bool* isInStatic, size_t gpuMemoryLimitBytes = 0){
     unsigned long max_partition_size;
     unsigned long max_static_node;
     unsigned long total_gpu_size;
-    uint fragmentSize = 4096;
+    SIZE_TYPE fragmentSize = 4096;
     int deviceID;
     cudaDeviceProp dev{};
     cudaGetDevice(&deviceID);
@@ -44,7 +44,7 @@ StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize
     }
     g_gpuMemTracker.totalAllocated = 0;
     size_t reduceMem;
-    reduceMem = 6*sizeof(uint)*(size_t)vertexArrSize;
+    reduceMem = 6*sizeof(SIZE_TYPE)*(size_t)vertexArrSize;
     reduceMem += 4 * sizeof(bool) * (size_t) vertexArrSize;
     reduceMem += (size_t)vertexArrSize*sizeof(EDGE_POINTER_TYPE);
     cout << "reduceMem " << reduceMem << " testNumNodes " << vertexArrSize << " edgeArrSize " << edgeArrSize << " ParamsSize " << paramSize << endl;
@@ -53,7 +53,7 @@ StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize
              << availMemory / (1024.0*1024.0) << " MB). Setting edge partition to minimum." << endl;
         total_gpu_size = 0;
     } else {
-        total_gpu_size = (availMemory - reduceMem) / sizeof(uint);
+        total_gpu_size = (availMemory - reduceMem) / sizeof(SIZE_TYPE);
     }
     max_partition_size = total_gpu_size;
     if (max_partition_size > edgeArrSize) {
@@ -63,15 +63,11 @@ StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize
     printf("static memory is %zu totalGlobalMem is %zu, max static edge size is %lu\n gpu total edge size %lu \n multiprocessors %d \n",
                 (reduceMem < availMemory) ? (availMemory - reduceMem) : (size_t)0,
                 dev.totalGlobalMem, max_partition_size, total_gpu_size, dev.multiProcessorCount);
-    if (max_partition_size > UINT_MAX) {
-        printf("bigger than DIST_INFINITY\n");
-        max_partition_size = UINT_MAX;
-    }
-    uint temp = max_partition_size % fragmentSize;
+    SIZE_TYPE temp = max_partition_size % fragmentSize;
     max_partition_size = max_partition_size - temp;
     max_static_node = 0;
-    uint edgesInStatic = 0;
-    for (uint i = 0; i < vertexArrSize; i++) {
+    SIZE_TYPE edgesInStatic = 0;
+    for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
         if (nodePointers[i] < max_partition_size && (nodePointers[i] + degree[i] - 1) < max_partition_size) {
             isInStatic[i] = true;
             if (i > max_static_node) max_static_node = i;
@@ -85,25 +81,25 @@ StaticRegionInfo getMaxPartionSize(int paramSize, unsigned long long edgeArrSize
     info.max_partion_size = max_partition_size;
     return info;
 }
-void refreshLableAndValue(bool* isActiveD, bool *isStaticActiveD, bool* isoverloadActiveD,uint* value, uint* valueD){
+void refreshLableAndValue(bool* isActiveD, bool *isStaticActiveD, bool* isoverloadActiveD,SIZE_TYPE* value, SIZE_TYPE* valueD){
     cudaMemset(isActiveD,1,sizeof(bool)*vertexArrSize);
     cudaMemset(isStaticActiveD,0,sizeof(bool)*vertexArrSize);
     cudaMemset(isoverloadActiveD,0,sizeof(bool)*vertexArrSize);
-    cudaMemcpy(valueD,value,vertexArrSize*sizeof(uint),cudaMemcpyHostToDevice);
+    cudaMemcpy(valueD,value,vertexArrSize*sizeof(SIZE_TYPE),cudaMemcpyHostToDevice);
 }
 
 __global__ 
-void cc_kernelStatic(uint activeNodesNum, uint *activeNodeListD,
-                    uint *staticNodePointerD, uint *degreeD,
-                    uint *edgeListD, uint *valueD, bool *isActiveD, bool *isInStaticD) {
-    streamVertices(activeNodesNum, [&](uint index) {
-        uint id = activeNodeListD[index];
+void cc_kernelStatic(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeListD,
+                    SIZE_TYPE *staticNodePointerD, SIZE_TYPE *degreeD,
+                    SIZE_TYPE *edgeListD, SIZE_TYPE *valueD, bool *isActiveD, bool *isInStaticD) {
+    streamVertices(activeNodesNum, [&](SIZE_TYPE index) {
+        SIZE_TYPE id = activeNodeListD[index];
         if (isInStaticD[id]) {
-            uint edgeIndex = staticNodePointerD[id];
-            uint sourceValue = valueD[id];
-            for (uint i = 0; i < degreeD[id]; i++) {
-                uint vertexId = edgeListD[edgeIndex + i];
-                uint destValue = valueD[vertexId];
+            SIZE_TYPE edgeIndex = staticNodePointerD[id];
+            SIZE_TYPE sourceValue = valueD[id];
+            for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
+                SIZE_TYPE vertexId = edgeListD[edgeIndex + i];
+                SIZE_TYPE destValue = valueD[vertexId];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD[vertexId] = 1;
@@ -122,7 +118,7 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
         return;
     }
     EDGE_POINTER_TYPE *nodePointers;
-    uint* edgeArray; 
+    SIZE_TYPE* edgeArray; 
     
     StaticRegionInfo StaticInfo;
     //ReadDataFile
@@ -131,47 +127,64 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     bool isBCSR = endsWith(fileName, ".bcsr") || endsWith(fileName, ".bwcsr");
     ifstream infile(fileName, ios::in | ios::binary);
     if (isBCSR) {
-        // Subway bcsr format: uint32 header + uint32 nodePointers
-        uint num_nodes, num_edges;
-        infile.read((char *) &num_nodes, sizeof(uint));
-        infile.read((char *) &num_edges, sizeof(uint));
+        // Subway bcsr format: uint32 header + uint32 nodePointers + uint32 edges
+        uint32_t num_nodes, num_edges;
+        infile.read((char *) &num_nodes, sizeof(uint32_t));
+        infile.read((char *) &num_edges, sizeof(uint32_t));
         vertexArrSize = num_nodes;
         edgeArrSize = num_edges;
         cout << "vertex num: " << vertexArrSize << " edge num: " << edgeArrSize << endl;
-        uint *nodePointersU32 = new uint[num_nodes];
-        infile.read((char *) nodePointersU32, sizeof(uint) * num_nodes);
+        // Read 32-bit nodePointers and widen to 64-bit
+        uint32_t *nodePointersU32 = new uint32_t[num_nodes];
+        infile.read((char *) nodePointersU32, sizeof(uint32_t) * num_nodes);
         nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
-        for (uint i = 0; i < num_nodes; i++) {
+        for (SIZE_TYPE i = 0; i < num_nodes; i++) {
             nodePointers[i] = (EDGE_POINTER_TYPE) nodePointersU32[i];
         }
         delete[] nodePointersU32;
-        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(uint)*edgeArrSize));
-        infile.read((char *) edgeArray, sizeof(uint) * edgeArrSize);
+        // Read 32-bit edges and widen to 64-bit
+        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(SIZE_TYPE)*edgeArrSize));
+        {
+            const size_t CHUNK = 1 << 20;
+            uint32_t *buf = new uint32_t[CHUNK];
+            EDGE_POINTER_TYPE offset = 0;
+            EDGE_POINTER_TYPE remaining = edgeArrSize;
+            while (remaining > 0) {
+                size_t n = (remaining < (EDGE_POINTER_TYPE)CHUNK) ? (size_t)remaining : CHUNK;
+                infile.read((char *)buf, sizeof(uint32_t) * n);
+                for (size_t i = 0; i < n; i++) {
+                    edgeArray[offset + i] = (SIZE_TYPE)buf[i];
+                }
+                offset += n;
+                remaining -= n;
+            }
+            delete[] buf;
+        }
     } else {
         infile.read((char *) &vertexArrSize, sizeof(EDGE_POINTER_TYPE));
         infile.read((char *) &edgeArrSize, sizeof(EDGE_POINTER_TYPE));
         cout << "vertex num: " << vertexArrSize << " edge num: " << edgeArrSize << endl;
         nodePointers = new EDGE_POINTER_TYPE[vertexArrSize];
         infile.read((char *) nodePointers, sizeof(EDGE_POINTER_TYPE) * vertexArrSize);
-        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(uint)*edgeArrSize));
-        infile.read((char *) edgeArray, sizeof(uint) * edgeArrSize);
+        gpuErrorcheck(cudaMallocHost(&edgeArray, sizeof(SIZE_TYPE)*edgeArrSize));
+        infile.read((char *) edgeArray, sizeof(SIZE_TYPE) * edgeArrSize);
     }
     auto endTime = chrono::steady_clock::now();
     auto duration = chrono::duration_cast<chrono::milliseconds>(endTime - startTime).count();
     cout << "readDataFromFile " << duration << " ms" << endl;
 
-    uint* degree;
+    SIZE_TYPE* degree;
     bool* isInStatic;
-    uint* overloadNodeList;
+    SIZE_TYPE* overloadNodeList;
     bool* isActive;
-    uint* value;
-    uint* staticnodepointers;
+    SIZE_TYPE* value;
+    SIZE_TYPE* staticnodepointers;
     cout << "initGraphHost()" << endl;
-    degree = new uint[vertexArrSize];
+    degree = new SIZE_TYPE[vertexArrSize];
     isInStatic = new bool[vertexArrSize];
-    overloadNodeList = new uint[vertexArrSize];
+    overloadNodeList = new SIZE_TYPE[vertexArrSize];
     isActive = new bool[vertexArrSize];
-    value = new uint[vertexArrSize];
+    value = new SIZE_TYPE[vertexArrSize];
     
     for (SIZE_TYPE i = 0; i < vertexArrSize - 1; i++) {
         if (nodePointers[i] > edgeArrSize) {
@@ -186,33 +199,33 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
         gpuMemLimitBytes = (size_t)(gpuMemoryLimit * 1024ULL * 1024ULL * 1024ULL);
     }
     StaticInfo = getMaxPartionSize(11,edgeArrSize,vertexArrSize,nodePointers,degree,isInStatic, gpuMemLimitBytes);
-    for(uint i=0;i<vertexArrSize;i++){
+    for(SIZE_TYPE i=0;i<vertexArrSize;i++){
         isActive[i] = 1;
         value[i] = i;
     }
 
-    uint max_static_node = StaticInfo.max_node+1;
-    uint max_partition_size = StaticInfo.max_partion_size;
-    staticnodepointers = new uint[max_static_node];
-    for(uint i=0;i<max_static_node;i++){
-        staticnodepointers[i] = (uint)nodePointers[i];
+    SIZE_TYPE max_static_node = StaticInfo.max_node+1;
+    SIZE_TYPE max_partition_size = StaticInfo.max_partion_size;
+    staticnodepointers = new SIZE_TYPE[max_static_node];
+    for(SIZE_TYPE i=0;i<max_static_node;i++){
+        staticnodepointers[i] = (SIZE_TYPE)nodePointers[i];
     }
 
     cudaStream_t StreamStatic, StreamDynamic;
     EDGE_POINTER_TYPE* nodePointersD;
-    uint* prefixSumTemp;
-    uint* staticNodePointersD;
-    uint* staticEdgeListD;
+    SIZE_TYPE* prefixSumTemp;
+    SIZE_TYPE* staticNodePointersD;
+    SIZE_TYPE* staticEdgeListD;
     bool* isInStaticD;
-    uint* overloadNodeListD;
-    uint* staticNodeListD;
-    uint* degreeD;
+    SIZE_TYPE* overloadNodeListD;
+    SIZE_TYPE* staticNodeListD;
+    SIZE_TYPE* degreeD;
     bool* isActiveD;
     bool* isStaticActive;
     bool* isOverloadActive;
-    uint* valueD;
+    SIZE_TYPE* valueD;
     cout<<"initGraphDevice()"<<endl;
-    GPU_MALLOC(&prefixSumTemp, vertexArrSize * sizeof(uint), "CC:prefixSumTemp");
+    GPU_MALLOC(&prefixSumTemp, vertexArrSize * sizeof(SIZE_TYPE), "CC:prefixSumTemp");
     gpuErrorcheck(cudaStreamCreate(&StreamStatic));
     gpuErrorcheck(cudaStreamCreate(&StreamDynamic));
 
@@ -220,28 +233,28 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     preProcess.startRecord();
     GPU_MALLOC(&nodePointersD, vertexArrSize*sizeof(EDGE_POINTER_TYPE), "CC:nodePointersD");
     gpuErrorcheck(cudaMemcpy(nodePointersD,nodePointers,vertexArrSize*sizeof(EDGE_POINTER_TYPE),cudaMemcpyHostToDevice));
-    GPU_MALLOC(&staticNodePointersD, max_static_node*sizeof(uint), "CC:staticNodePointersD");
-    gpuErrorcheck(cudaMemcpy(staticNodePointersD, staticnodepointers, max_static_node*sizeof(uint),cudaMemcpyHostToDevice));
-    GPU_MALLOC(&staticEdgeListD, max_partition_size * sizeof(uint), "CC:staticEdgeListD");
-    gpuErrorcheck(cudaMemcpy(staticEdgeListD, edgeArray, max_partition_size * sizeof(uint), cudaMemcpyHostToDevice));
+    GPU_MALLOC(&staticNodePointersD, max_static_node*sizeof(SIZE_TYPE), "CC:staticNodePointersD");
+    gpuErrorcheck(cudaMemcpy(staticNodePointersD, staticnodepointers, max_static_node*sizeof(SIZE_TYPE),cudaMemcpyHostToDevice));
+    GPU_MALLOC(&staticEdgeListD, max_partition_size * sizeof(SIZE_TYPE), "CC:staticEdgeListD");
+    gpuErrorcheck(cudaMemcpy(staticEdgeListD, edgeArray, max_partition_size * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice));
     preProcess.endRecord();
     long preMoveDataTime = preProcess.getDuration();
     preProcess.print();
     preProcess.clearRecord();
     GPU_MALLOC(&isInStaticD, vertexArrSize * sizeof(bool), "CC:isInStaticD");
     cudaMemcpy(isInStaticD, isInStatic, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
-    GPU_MALLOC(&overloadNodeListD, vertexArrSize * sizeof(uint), "CC:overloadNodeListD");
-    GPU_MALLOC(&staticNodeListD, vertexArrSize * sizeof(uint), "CC:staticNodeListD");
-    GPU_MALLOC(&degreeD, vertexArrSize * sizeof(uint), "CC:degreeD");
+    GPU_MALLOC(&overloadNodeListD, vertexArrSize * sizeof(SIZE_TYPE), "CC:overloadNodeListD");
+    GPU_MALLOC(&staticNodeListD, vertexArrSize * sizeof(SIZE_TYPE), "CC:staticNodeListD");
+    GPU_MALLOC(&degreeD, vertexArrSize * sizeof(SIZE_TYPE), "CC:degreeD");
     GPU_MALLOC(&isActiveD, vertexArrSize * sizeof(bool), "CC:isActiveD");
     GPU_MALLOC(&isStaticActive, vertexArrSize * sizeof(bool), "CC:isStaticActive");
     GPU_MALLOC(&isOverloadActive, vertexArrSize * sizeof(bool), "CC:isOverloadActive");
-    cudaMemcpy(degreeD, degree, vertexArrSize * sizeof(uint), cudaMemcpyHostToDevice);
+    cudaMemcpy(degreeD, degree, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     cudaMemcpy(isActiveD, isActive, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
     cudaMemset(isStaticActive, 0, vertexArrSize * sizeof(bool));
     cudaMemset(isOverloadActive, 0, vertexArrSize * sizeof(bool));
-    GPU_MALLOC(&valueD, vertexArrSize * sizeof(uint), "CC:valueD");
-    cudaMemcpy(valueD, value, vertexArrSize * sizeof(uint), cudaMemcpyHostToDevice);
+    GPU_MALLOC(&valueD, vertexArrSize * sizeof(SIZE_TYPE), "CC:valueD");
+    cudaMemcpy(valueD, value, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     thrust::device_ptr<bool> activeLablingThrust;
     thrust::device_ptr<bool> actStaticLablingThrust;
     thrust::device_ptr<bool> actOverLablingThrust;
@@ -257,9 +270,9 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     TimeRecord<chrono::milliseconds> staticProcess("staticProcess");
     TimeRecord<chrono::milliseconds> overloadProcess("overloadProcess");
     totalProcess.startRecord();
-    uint activeNodesNum;
+    SIZE_TYPE activeNodesNum;
     activeNodesNum = thrust::reduce(activeLablingThrust, activeLablingThrust + vertexArrSize, 0,
-                                    thrust::plus<uint>());
+                                    thrust::plus<SIZE_TYPE>());
     totalProcess.endRecord();
     cout << "activeNodesNum " << activeNodesNum << endl;
     totalProcess.print();
@@ -274,7 +287,7 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
         //
         cudaDeviceSynchronize();
         cout<<"================="<<"testIndex "<<testIndex<<"================="<<endl;
-        uint nodeSum = activeNodesNum;
+        SIZE_TYPE nodeSum = activeNodesNum;
         int iter = 0;
         totalProcess.startRecord();
         double overloadsize = 0;
@@ -283,25 +296,25 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
             //cout<<"iter "<<iter<<" activeNodeNum is "<<activeNodesNum<<" ";
             setStaticAndOverloadLabelBool<<<staticgrid,staticblock>>>(vertexArrSize, isActiveD, isStaticActive, isOverloadActive,
                                                         isInStaticD);
-            uint staticNodeNum = thrust::reduce(actStaticLablingThrust,
+            SIZE_TYPE staticNodeNum = thrust::reduce(actStaticLablingThrust,
                                                 actStaticLablingThrust + vertexArrSize, 0,
-                                                thrust::plus<uint>());
+                                                thrust::plus<SIZE_TYPE>());
             if (staticNodeNum > 0) {
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(prefixSumTemp);
                     
                 thrust::exclusive_scan(actStaticLablingThrust, actStaticLablingThrust + vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setStaticActiveNodeArray<<<staticgrid,staticblock, 0, StreamStatic>>>(vertexArrSize, staticNodeListD, isStaticActive,
                                                                                       prefixSumTemp);
             }
-            uint overloadNodeNum = thrust::reduce(actOverLablingThrust,
+            SIZE_TYPE overloadNodeNum = thrust::reduce(actOverLablingThrust,
                                                   actOverLablingThrust + vertexArrSize, 0,
-                                                  thrust::plus<uint>());
+                                                  thrust::plus<SIZE_TYPE>());
             //cout<<"staticNodeNum is "<<staticNodeNum<<" overloadNodeNum is "<<overloadNodeNum<<endl;
             if(overloadNodeNum>0){
-                thrust::device_ptr<uint> tempTestPrefixThrust = thrust::device_ptr<uint>(prefixSumTemp);
+                thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(prefixSumTemp);
                 thrust::exclusive_scan(actOverLablingThrust, actOverLablingThrust + vertexArrSize,
-                                       tempTestPrefixThrust, 0, thrust::plus<uint>());
+                                       tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setActiveNodeList<<<staticgrid,staticblock, 0, StreamStatic>>>(vertexArrSize, isOverloadActive, overloadNodeListD,
                                                                                prefixSumTemp);
             }
@@ -323,8 +336,8 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
                 overloadProcess.startRecord();
                 // uint64_t numblocks = ((overloadNodeNum * WARP_SIZE + numthreads) / numthreads);
                 // dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
-                // uint numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
-                uint numwarps = (1024*56+32)/32;
+                // SIZE_TYPE numwarps = blockDim.x*blockDim.y*numthreads / WARP_SIZE;
+                SIZE_TYPE numwarps = (1024*56+32)/32;
                 //cout<<"launch overload kernel"<<endl;
                 NEW_cc_kernelDynamicSwap_test<<<staticgrid, staticblock ,0,StreamDynamic>>>(overloadNodeNum, overloadNodeListD,
                                                                                         degreeD, valueD, numwarps,
@@ -346,15 +359,15 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
             }
             activeNodesNum = thrust::reduce(activeLablingThrust, activeLablingThrust + vertexArrSize,
                                             0,
-                                            thrust::plus<uint>());
+                                            thrust::plus<SIZE_TYPE>());
             nodeSum += activeNodesNum;
-            // uint overloadedges = 0;
-            // uint* overloadnodes = new uint[overloadNodeNum];
-            // cudaMemcpy(overloadnodes,overloadNodeListD,sizeof(uint)*overloadNodeNum,cudaMemcpyDeviceToHost);
-            // for(uint i=0;i<overloadNodeNum;i++){
+            // SIZE_TYPE overloadedges = 0;
+            // SIZE_TYPE* overloadnodes = new SIZE_TYPE[overloadNodeNum];
+            // cudaMemcpy(overloadnodes,overloadNodeListD,sizeof(SIZE_TYPE)*overloadNodeNum,cudaMemcpyDeviceToHost);
+            // for(SIZE_TYPE i=0;i<overloadNodeNum;i++){
             //     overloadedges += degree[overloadnodes[i]];
             // }
-            // double temp = (double)(overloadedges)*sizeof(uint)/1024;
+            // double temp = (double)(overloadedges)*sizeof(SIZE_TYPE)/1024;
             // cout<<temp<<endl;
             // overloadsize += temp;
         }
@@ -373,13 +386,13 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
         overloadProcess.clearRecord();
         if (verify && testIndex == testTimes - 1) {
             // Verify before refresh resets the values
-            cudaMemcpy(value, valueD, vertexArrSize * sizeof(uint), cudaMemcpyDeviceToHost);
+            cudaMemcpy(value, valueD, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
             cudaDeviceSynchronize();
             cpu_verify_cc(nodePointers, edgeArray, vertexArrSize, edgeArrSize, value);
         }
         refreshLableAndValue(isActiveD,isStaticActive,isOverloadActive,value,valueD);
         activeNodesNum = thrust::reduce(activeLablingThrust, activeLablingThrust + vertexArrSize, 0,
-                                    thrust::plus<uint>());
+                                    thrust::plus<SIZE_TYPE>());
     }
     cout<<"========TEST OVER========"<<endl;
     cout<<"pre move data time: "<<preMoveDataTime<<"ms"<<endl;
