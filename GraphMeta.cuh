@@ -792,30 +792,35 @@ void GraphMeta<EdgeType>::initGraphDevice() {
 
     gpuErrorcheck(cudaStreamCreate(&steamStatic));
     gpuErrorcheck(cudaStreamCreate(&streamDynamic));
-    //pre store
+    // preMoveTimer accumulates ALL H2D memcpy time in initGraphDevice,
+    // EXCLUDING cudaMalloc / GPU_MALLOC time.
     TimeRecord<chrono::milliseconds> preMoveTimer("pre move data");
-    preMoveTimer.startRecord();
+
     GPU_MALLOC(&staticEdgeListD, max_partition_size * sizeof(EdgeType), "staticEdgeListD");
+    preMoveTimer.startRecord();
     gpuErrorcheck(cudaMemcpy(staticEdgeListD, edgeArray, max_partition_size * sizeof(EdgeType), cudaMemcpyHostToDevice));
     preMoveTimer.endRecord();
-    preMoveDataTime = preMoveTimer.getDuration();
-    preMoveTimer.print();
-    preMoveTimer.clearRecord();
 
     GPU_MALLOC(&isInStaticD, vertexArrSize * sizeof(bool), "isInStaticD");
     GPU_MALLOC(&overloadNodeListD, vertexArrSize * sizeof(SIZE_TYPE), "overloadNodeListD");
     GPU_MALLOC(&staticNodeListD, vertexArrSize * sizeof(SIZE_TYPE), "staticNodeListD");
 
     GPU_MALLOC(&staticNodePointerD, (max_static_node+1) * sizeof(EDGE_POINTER_TYPE), "staticNodePointerD");
+    preMoveTimer.startRecord();
     gpuErrorcheck(cudaMemcpy(staticNodePointerD, staticNodePointer, (max_static_node+1) * sizeof(EDGE_POINTER_TYPE), cudaMemcpyHostToDevice));
+    preMoveTimer.endRecord();
     gpuErrorcheck(cudaPeekAtLastError());
+    preMoveTimer.startRecord();
     cudaMemcpy(isInStaticD, isInStatic, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
+    preMoveTimer.endRecord();
     //test new model
     if(model==OLD_MODEL) {
         GPU_MALLOC(&overloadEdgeListD, partOverloadSize * sizeof(EdgeType), "overloadEdgeListD");
     } else{
         GPU_MALLOC(&nodePointersD, vertexArrSize*sizeof(EDGE_POINTER_TYPE), "nodePointersD");
+        preMoveTimer.startRecord();
         cudaMemcpy(nodePointersD,nodePointers,vertexArrSize*sizeof(EDGE_POINTER_TYPE),cudaMemcpyHostToDevice);
+        preMoveTimer.endRecord();
     }
     GPU_MALLOC(&degreeD, vertexArrSize * sizeof(SIZE_TYPE), "degreeD");
     GPU_MALLOC(&isActiveD, vertexArrSize * sizeof(bool), "isActiveD");
@@ -823,32 +828,40 @@ void GraphMeta<EdgeType>::initGraphDevice() {
     GPU_MALLOC(&isOverloadActive, vertexArrSize * sizeof(bool), "isOverloadActive");
     //cudaMalloc(&activeNodeLabelingPrefixD, vertexArrSize * sizeof(SIZE_TYPE));
     //cudaMalloc(&overloadLabelingPrefixD, vertexArrSize * sizeof(SIZE_TYPE));
- 
+
     //cudaMalloc(&activeNodeListD, vertexArrSize * sizeof(SIZE_TYPE));
     if(model!=7){
         GPU_MALLOC(&activeOverloadNodePointersD, vertexArrSize * sizeof(EDGE_POINTER_TYPE), "activeOverloadNodePointersD");
         GPU_MALLOC(&activeOverloadDegreeD, vertexArrSize * sizeof(EDGE_POINTER_TYPE), "activeOverloadDegreeD");
     }
+    preMoveTimer.startRecord();
     cudaMemcpy(degreeD, degree, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
     cudaMemcpy(isActiveD, label, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
+    preMoveTimer.endRecord();
     cudaMemset(isStaticActive, 0, vertexArrSize * sizeof(bool));
     cudaMemset(isOverloadActive, 0, vertexArrSize * sizeof(bool));
     if(algType == PR) {
-        
+
             GPU_MALLOC(&outDegreeD, vertexArrSize * sizeof(SIZE_TYPE), "outDegreeD");
+            preMoveTimer.startRecord();
             cudaMemcpy(outDegreeD, outDegree, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+            preMoveTimer.endRecord();
             GPU_MALLOC(&valuePrD, vertexArrSize * sizeof(float), "valuePrD");
+            preMoveTimer.startRecord();
             cudaMemcpy(valuePrD, valuePr, vertexArrSize * sizeof(float), cudaMemcpyHostToDevice);
+            preMoveTimer.endRecord();
             GPU_MALLOC(&sumD, vertexArrSize * sizeof(float), "sumD");
             cudaMemset(sumD, 0, vertexArrSize * sizeof(float));
             //cudaMalloc(&Diff,vertexArrSize*sizeof(float));
             //cudaMemset(Diff,0.0,vertexArrSize*sizeof(float));
             sumDThrust = thrust::device_ptr<float>(sumD);
             //DiffDThrust = thrust::device_ptr<float>(Diff);
-        
+
     } else {
         GPU_MALLOC(&valueD, vertexArrSize * sizeof(SIZE_TYPE), "valueD");
+        preMoveTimer.startRecord();
         cudaMemcpy(valueD, value, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
+        preMoveTimer.endRecord();
     }
     activeLablingThrust = thrust::device_ptr<bool>(isActiveD);
     actStaticLablingThrust = thrust::device_ptr<bool>(isStaticActive);
@@ -856,6 +869,8 @@ void GraphMeta<EdgeType>::initGraphDevice() {
     if(model!=7)
     actOverDegreeThrust = thrust::device_ptr<EDGE_POINTER_TYPE>(activeOverloadDegreeD);
     gpuErrorcheck(cudaPeekAtLastError());
+    preMoveDataTime = preMoveTimer.getDuration();
+    preMoveTimer.print();
     g_gpuMemTracker.printSummary();
     cout << "initGraphDevice() end" << endl;
 }
@@ -988,10 +1003,10 @@ void GraphMeta<EdgeType>::initLableAndValue() {
             case SSSP:
                 for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
                     label[i] = 0;
-                    value[i] = vertexArrSize + 1;
+                    value[i] = ULLONG_MAX;
                 }
                 label[sourceNode] = 1;
-                value[sourceNode] = 1;
+                value[sourceNode] = 0;
                 break;
             case CC:
                 for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
@@ -1005,16 +1020,22 @@ void GraphMeta<EdgeType>::initLableAndValue() {
 template<class EdgeType>
 void GraphMeta<EdgeType>::refreshLabelAndValue() {
     cout << "refreshLabelAndValue()" << endl;
+    // refreshTimer accumulates all H2D memcpy time in this refresh call.
+    // The duration is added to preMoveDataTime so the reported pre-move
+    // time includes every H2D transfer before the main compute loop.
+    TimeRecord<chrono::milliseconds> refreshTimer("refresh H2D");
     if (algType == PR) {
         for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
             label[i] = 1;
             valuePr[i] = 0.15f;
         }
         //cout << "refreshLabelAndValue() end1" << endl;
+        refreshTimer.startRecord();
         cudaMemcpy(valuePrD, valuePr, vertexArrSize * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(isActiveD, label, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
         cudaMemcpy(isInStaticD, isInStatic, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
-        
+        refreshTimer.endRecord();
+
         //cout << "refreshLabelAndValue() end2" << endl;
         gpuErrorcheck(cudaMemset(isStaticActive, 0, vertexArrSize * sizeof(bool)));
         gpuErrorcheck(cudaMemset(isOverloadActive, 0, vertexArrSize * sizeof(bool)));
@@ -1033,10 +1054,10 @@ void GraphMeta<EdgeType>::refreshLabelAndValue() {
             case SSSP:
                 for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
                     label[i] = 0;
-                    value[i] = vertexArrSize + 1;
+                    value[i] = ULLONG_MAX;
                 }
                 label[sourceNode] = 1;
-                value[sourceNode] = 1;
+                value[sourceNode] = 0;
                 break;
             case CC:
                 for (SIZE_TYPE i = 0; i < vertexArrSize; i++) {
@@ -1045,12 +1066,15 @@ void GraphMeta<EdgeType>::refreshLabelAndValue() {
                 }
 
         }
+        refreshTimer.startRecord();
         cudaMemcpy(valueD, value, vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyHostToDevice);
         cudaMemcpy(isActiveD, label, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
         cudaMemcpy(isInStaticD, isInStatic, vertexArrSize * sizeof(bool), cudaMemcpyHostToDevice);
+        refreshTimer.endRecord();
         gpuErrorcheck(cudaMemset(isStaticActive, 0, vertexArrSize * sizeof(bool)));
         gpuErrorcheck(cudaMemset(isOverloadActive, 0, vertexArrSize * sizeof(bool)));
     }
+    preMoveDataTime += refreshTimer.getDuration();
 
     activeLablingThrust = thrust::device_ptr<bool>(isActiveD);
     actStaticLablingThrust = thrust::device_ptr<bool>(isStaticActive);

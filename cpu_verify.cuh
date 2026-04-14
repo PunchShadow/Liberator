@@ -216,7 +216,7 @@ static bool cpu_verify_cc(
 }
 
 // ==================== SSSP CPU Verification ====================
-// Parallel Bellman-Ford with frontier. Source distance = 1 (matching Liberator).
+// Parallel Bellman-Ford with frontier. Source distance = 0, INF = ULLONG_MAX.
 static bool cpu_verify_sssp(
     const EDGE_POINTER_TYPE *nodePointers,
     const EdgeWithWeight *edgeList,
@@ -227,12 +227,12 @@ static bool cpu_verify_sssp(
 {
     cout << "\n=== CPU SSSP Verification (parallel Bellman-Ford) ===" << endl;
     auto t0 = chrono::steady_clock::now();
-    const SIZE_TYPE INF = vertexArrSize + 1;
+    const SIZE_TYPE INF = ULLONG_MAX;
 
     SIZE_TYPE *dist = new SIZE_TYPE[vertexArrSize];
     #pragma omp parallel for
     for (SIZE_TYPE i = 0; i < vertexArrSize; i++) dist[i] = INF;
-    dist[sourceNode] = 1;
+    dist[sourceNode] = 0;
 
     bool *inNextFrontier = new bool[vertexArrSize];
     memset(inNextFrontier, 0, vertexArrSize * sizeof(bool));
