@@ -12,8 +12,8 @@ void bfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int
 void cc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false);
 void sssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false);
 void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false);
-void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit = 0.0, bool verify = false);
-void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false);
-void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false);
-void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false);
+void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "");
+void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "");
+void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "");
+void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "");
 #endif //PTGRAPH_CALCULATEOPT_CUH

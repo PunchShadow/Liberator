@@ -167,9 +167,12 @@ public:
     SIZE_TYPE *valueD;
     float *valuePrD;
     float *sumD;
-    //float *Diff;
+    // diffD: per-vertex |new_val - old_val| written by prKernel_Opt.
+    // Reduced to a global max each iter to drive PR termination (Option 1:
+    // always process all vertices, converge on global max diff).
+    float *diffD;
     thrust::device_ptr<float> sumDThrust;
-    thrust::device_ptr<float> DiffDThrust;
+    thrust::device_ptr<float> diffDThrust;
     //SIZE_TYPE *activeNodeListD;
     //SIZE_TYPE *activeNodeLabelingPrefixD;
     //SIZE_TYPE *overloadLabelingPrefixD;
@@ -852,10 +855,10 @@ void GraphMeta<EdgeType>::initGraphDevice() {
             preMoveTimer.endRecord();
             GPU_MALLOC(&sumD, vertexArrSize * sizeof(float), "sumD");
             cudaMemset(sumD, 0, vertexArrSize * sizeof(float));
-            //cudaMalloc(&Diff,vertexArrSize*sizeof(float));
-            //cudaMemset(Diff,0.0,vertexArrSize*sizeof(float));
+            GPU_MALLOC(&diffD, vertexArrSize * sizeof(float), "diffD");
+            cudaMemset(diffD, 0, vertexArrSize * sizeof(float));
             sumDThrust = thrust::device_ptr<float>(sumD);
-            //DiffDThrust = thrust::device_ptr<float>(Diff);
+            diffDThrust = thrust::device_ptr<float>(diffD);
 
     } else {
         GPU_MALLOC(&valueD, vertexArrSize * sizeof(SIZE_TYPE), "valueD");
@@ -906,7 +909,8 @@ void GraphMeta<EdgeType>::getMaxPartitionSize() {
     size_t reduceMem;
     if(algType==PR){
         reduceMem = (size_t)(paramSize-2) * sizeof(SIZE_TYPE) * (size_t) vertexArrSize;
-        reduceMem += sizeof(float) * 2 * (size_t)vertexArrSize;
+        // 3 float arrays: valuePrD, sumD, diffD (Option 1 termination tracking).
+        reduceMem += sizeof(float) * 3 * (size_t)vertexArrSize;
     }
     else
     reduceMem = (size_t)paramSize * sizeof(SIZE_TYPE) * (size_t) vertexArrSize + (size_t)vertexArrSize*sizeof(EDGE_POINTER_TYPE);

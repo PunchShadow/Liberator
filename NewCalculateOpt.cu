@@ -1,7 +1,9 @@
 #include "CalculateOpt.cuh"
 #include "cpu_verify.cuh"
+#include "cache_density.cuh"
+#include "edge_path.cuh"
 
-void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify){
+void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv){
     cout << "======NEW_bfs_opt=======" << endl;
     cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<SIZE_TYPE> graph;
@@ -51,6 +53,10 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
     long overloaduration = 0;
     long staticduration = 0;
     double overloadsize = 0;
+    CacheDensityRecorder cacheRec(graph.vertexArrSize, graph.isInStaticD,
+                                  "bfs", path, (long long)sourceNode, cacheCsv);
+    EdgePathRecorder pathRec(graph.vertexArrSize,
+                             "bfs", path, (long long)sourceNode, pathCsv);
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
         if(src<graph.vertexArrSize)
         graph.setSourceNode(src);
@@ -58,7 +64,7 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
         graph.setSourceNode(sourceNode);
         unsigned long long overloadedges = 0;
         cout<<"======iter "<<testIndex<<"======"<<endl;
-        time_t now = time(0); 
+        time_t now = time(0);
         graph.refreshLabelAndValue();
         cudaDeviceSynchronize();
         activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize, 0,
@@ -69,18 +75,26 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
         totalProcess.startRecord();
         while(activeNodesNum){
             iter++;
+            // Cache-density snapshot: isActiveD still holds this iter's
+            // incoming frontier at this point.  setLabelDefaultOpt below
+            // will clear processed vertices, so record must happen first.
+            cacheRec.record(graph.isActiveD, graph.isInStaticD);
             //cout <<"iter "<<iter;
             //cout <<"iter "<<iter<< " activeNodesNum is " << activeNodesNum << " ";
             preProcess.startRecord();
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
                                                                        graph.isStaticActive, graph.isOverloadActive,
                                                                        graph.isInStaticD);
+            // Edge-path snapshot: isStaticActive / isOverloadActive are now
+            // populated.  Count Σ degree[v] per path.
+            pathRec.record(graph.isStaticActive, graph.isOverloadActive,
+                           graph.degreeD);
             SIZE_TYPE staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
                                                 graph.actStaticLablingThrust + graph.vertexArrSize, 0,
                                                 thrust::plus<SIZE_TYPE>());
             if (staticNodeNum > 0) {
                 thrust::device_ptr<SIZE_TYPE> tempTestPrefixThrust = thrust::device_ptr<SIZE_TYPE>(graph.prefixSumTemp);
-                    
+
                 thrust::exclusive_scan(graph.actStaticLablingThrust, graph.actStaticLablingThrust + graph.vertexArrSize,
                                        tempTestPrefixThrust, 0, thrust::plus<SIZE_TYPE>());
                 setStaticActiveNodeArray<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.staticNodeListD,
@@ -196,6 +210,10 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
     //cout<<"average transfer data: "<<overloadsize/testTimes<<" GB"<<endl;
+    cacheRec.printSummary();
+    cacheRec.writeCsv(cacheCsv, 0);
+    pathRec.printSummary();
+    pathRec.writeCsv(pathCsv, 0);
     if (verify) {
         cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
         cudaDeviceSynchronize();
@@ -203,7 +221,7 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
     }
 }
 
-void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify){
+void newcc_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv){
     cout << "======NEW_cc_opt=======" << endl;
     //cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<SIZE_TYPE> graph;
@@ -407,7 +425,7 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes, double gp
     }
 }
 
-void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify){
+void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv){
     cout << "========NEW_sssp_opt==========" << endl;
     GraphMeta<EdgeWithWeight> graph;
     graph.setAlgType(SSSP);
@@ -441,6 +459,10 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
     uint64_t numblocks = ((graph.vertexArrSize * WARP_SIZE + numthreads) / numthreads);
     dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
     //double overloadGB =0;
+    CacheDensityRecorder cacheRec(graph.vertexArrSize, graph.isInStaticD,
+                                  "sssp", path, (long long)sourceNode, cacheCsv);
+    EdgePathRecorder pathRec(graph.vertexArrSize,
+                             "sssp", path, (long long)sourceNode, pathCsv);
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
         cout<<"================="<<"testIndex "<<testIndex<<"================="<<endl;
         cout<<"source: "<<src<<endl;
@@ -456,10 +478,16 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
 
         while(activeNodesNum){
             iter++;
+            // Cache-density snapshot: isActiveD holds this iter's incoming
+            // frontier here, before setLabelDefaultOpt clears processed vertices.
+            cacheRec.record(graph.isActiveD, graph.isInStaticD);
             //cout<<"iter "<<iter<<" activeNodeNum is "<<activeNodesNum<<" ";
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
                                                                        graph.isStaticActive, graph.isOverloadActive,
                                                                        graph.isInStaticD);
+            // Edge-path snapshot
+            pathRec.record(graph.isStaticActive, graph.isOverloadActive,
+                           graph.degreeD);
             SIZE_TYPE staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
                                                 graph.actStaticLablingThrust + graph.vertexArrSize, 0,
                                                 thrust::plus<SIZE_TYPE>());
@@ -557,6 +585,10 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
     cout<<"Test over, average total process time (including pre move data): "<<totalduration/testTimes + graph.preMoveDataTime<<"ms"<<endl;
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloaduration/testTimes<<"ms"<<endl;
+    cacheRec.printSummary();
+    cacheRec.writeCsv(cacheCsv, 0);
+    pathRec.printSummary();
+    pathRec.writeCsv(pathCsv, 0);
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("newsssp.txt");
     if (verify) {
@@ -566,7 +598,7 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
     }
 }
 
-void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify){
+void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv){
     cout<<"========NEW_pr_opt==========="<<endl;
     GraphMeta<unsigned long long> graph;
     graph.setAlgType(PR);
@@ -599,6 +631,9 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
     cout<<endl;
     cout<<"=================PR test start================="<<endl;
     double overloadsize=0;
+    CacheDensityRecorder cacheRec(graph.vertexArrSize, graph.isInStaticD,
+                                  "pr", path, -1LL, cacheCsv);
+    EdgePathRecorder pathRec(graph.vertexArrSize, "pr", path, -1LL, pathCsv);
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
         cout<<"====="<<testIndex<<" test====="<<endl;
         graph.refreshLabelAndValue();
@@ -616,14 +651,26 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
         uint64_t numblocks = ((graph.vertexArrSize * WARP_SIZE + numthreads) / numthreads);
         dim3 blockDim(BLOCK_SIZE, (numblocks+BLOCK_SIZE)/BLOCK_SIZE);
         //unsigned long long overloadedges=0;
-        while(activeNodesNum > 0 ){
+        // Option 1: drive termination on global max diff, not on active count.
+        const float PR_TOLERANCE = 0.01f;
+        const int PR_MAX_ITER = 1000;
+        float maxDiff = PR_TOLERANCE + 1.0f;
+        while(maxDiff > PR_TOLERANCE && iter < PR_MAX_ITER){
             //overloadedges = 0;
             iter++;
+            // Cache-density snapshot: isActiveD still holds this iter's
+            // incoming frontier (set by previous prKernel_Opt).  PR iter 1
+            // in particular will report active_in_cache = staticVertexCount
+            // because refreshLabelAndValue labels all vertices as active.
+            cacheRec.record(graph.isActiveD, graph.isInStaticD);
             //cout<<"iter "<<iter;
             preProcess.startRecord();
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
                                                                        graph.isStaticActive, graph.isOverloadActive,
                                                                        graph.isInStaticD);
+            // Edge-path snapshot
+            pathRec.record(graph.isStaticActive, graph.isOverloadActive,
+                           graph.degreeD);
             SIZE_TYPE staticNodeNum = thrust::reduce(graph.actStaticLablingThrust,
                                                 graph.actStaticLablingThrust + graph.vertexArrSize, 0,
                                                 thrust::plus<SIZE_TYPE>());
@@ -676,17 +723,14 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
                 staticProcess.endRecord();
             }
             preProcess.startRecord();
-            //totalDiff = thrust::reduce(thrust::device, graph.DiffDThrust, graph.DiffDThrust+graph.vertexArrSize);
-            prKernel_Opt<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.valuePrD, graph.sumD, graph.isActiveD);
-            // double oldsum = thrust::reduce(graph.sumDThrust, graph.sumDThrust + graph.vertexArrSize,0, thrust::plus<double>());
-            // double tempAdd = (1.0-oldsum)/graph.vertexArrSize;
-            //prKernel_Opt<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.valuePrD, graph.sumD, graph.isActiveD);
+            prKernel_Opt<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.valuePrD, graph.sumD, graph.isActiveD, graph.diffD);
             cudaDeviceSynchronize();
-            activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize,
-                                            0,
-                                            thrust::plus<SIZE_TYPE>());
+            // Option 1: all vertices stay active; convergence uses the
+            // per-vertex diff written by prKernel_Opt.
+            maxDiff = thrust::reduce(graph.diffDThrust, graph.diffDThrust + graph.vertexArrSize,
+                                     0.0f, thrust::maximum<float>());
+            activeNodesNum = graph.vertexArrSize;
             nodeSum += activeNodesNum;
-            //totalDiff = thrust::reduce(thrust::device, graph.DiffDThrust, graph.DiffDThrust+graph.vertexArrSize);
             preProcess.endRecord();
             //cout << "iter " << iter+1 << " activeNodesNum " << activeNodesNum << endl;
             // SIZE_TYPE *overloadnodes = new SIZE_TYPE[graph.vertexArrSize];
@@ -719,6 +763,10 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
     cout<<"average static process time: "<<Static/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<Overload/testTimes<<"ms"<<endl;
     //cout<<"Average overloadSize: "<<overloadsize/testTimes<<endl;
+    cacheRec.printSummary();
+    cacheRec.writeCsv(cacheCsv, 0);
+    pathRec.printSummary();
+    pathRec.writeCsv(pathCsv, 0);
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("Liberator_PR_GSHll_res.txt");
     if (verify) {

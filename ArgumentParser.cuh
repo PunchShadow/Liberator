@@ -22,6 +22,8 @@ public:
     int testTimes;
     double gpuMemoryLimit = 0.0; // GPU memory limit in GB (0 = use actual GPU memory)
     bool verify = false; // Run CPU verification after GPU computation
+    string cacheCsv; // Path for per-iter cache density CSV output (empty = disabled)
+    string pathCsv;  // Path for per-iter edge-path breakdown CSV output (empty = disabled)
     ArgumentParser(int argc, char **argv, bool canHaveSource);
 
     bool Parse();

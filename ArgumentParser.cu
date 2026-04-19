@@ -45,6 +45,12 @@ bool ArgumentParser::Parse() {
             else if(strcmp(argv[i], "--gpuMemory")==0){
                 gpuMemoryLimit = atof(argv[i+1]);
             }
+            else if(strcmp(argv[i], "--cache_csv")==0){
+                cacheCsv = string(argv[i+1]);
+            }
+            else if(strcmp(argv[i], "--path_csv")==0){
+                pathCsv = string(argv[i+1]);
+            }
         }
 
         if (hasInput)

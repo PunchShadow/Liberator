@@ -321,7 +321,7 @@ prSumKernel_dynamic(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNum, cons
                     K *sumD);
 
 template <typename T, typename K>
-__global__ void prKernel_Opt(SIZE_TYPE nodeNum, K *valueD, K *sumD, T *isActiveNodeList);
+__global__ void prKernel_Opt(SIZE_TYPE nodeNum, K *valueD, K *sumD, T *isActiveNodeList, K *diffD);
 
 __global__ void
 setFragmentDataOpt4Pr(SIZE_TYPE *staticFragmentData, SIZE_TYPE fragmentNum, SIZE_TYPE *fragmentVisitRecordsD,
@@ -879,21 +879,18 @@ __global__ void NEW_sssp_kernelDynamic_test(SIZE_TYPE overloadNodeNum, const SIZ
 
 template <typename T, typename K>
 __global__ void
-prKernel_Opt(SIZE_TYPE nodeNum, K *valueD, K *sumD, T *isActiveNodeList) {
+prKernel_Opt(SIZE_TYPE nodeNum, K *valueD, K *sumD, T *isActiveNodeList, K *diffD) {
+    // Option 1 semantics: every vertex is processed every iteration.
+    // The active flag is kept permanently set so setStaticAndOverloadLabelBool
+    // buckets every vertex each iter; the main loop terminates on the global
+    // max of diffD, not on the active-vertex count.
     streamVertices(nodeNum, [&](SIZE_TYPE index) {
-        if (isActiveNodeList[index]) {
-            K tempValue = 0.15 + 0.85 * sumD[index];
-            //K tempValue = 0.15*valueD[index] + 0.85*sumD[index];
-            K diff = tempValue > valueD[index] ? (tempValue - valueD[index]) : (valueD[index] - tempValue);
-            valueD[index] = tempValue;
-            if (diff > 0.01) {
-                isActiveNodeList[index] = 1;
-            } else {
-                isActiveNodeList[index] = 0;
-            }
-            sumD[index] = 0;
-        }
-
+        K tempValue = 0.15 + 0.85 * sumD[index];
+        K diff = tempValue > valueD[index] ? (tempValue - valueD[index]) : (valueD[index] - tempValue);
+        valueD[index] = tempValue;
+        diffD[index] = diff;
+        isActiveNodeList[index] = 1;
+        sumD[index] = 0;
     });
 }
 template <typename T, typename K>

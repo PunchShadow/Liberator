@@ -38,23 +38,23 @@ int main(int argc, char** argv) {
         cout << "arguments.algo " << arguments.algo << endl;
     cout<<"arguments.sourceNode "<<arguments.sourceNode<<endl;
         if(arguments.model==7)
-        newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
+        newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
         else
         bfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "cc") {
         if(arguments.model==7)
         //newcc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
-        New_CC_opt(arguments.input,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
+        New_CC_opt(arguments.input,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
         else
         cc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "sssp") {
         if(arguments.model==7)
-        newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
+        newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
         else
         sssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "pr") {
         if(arguments.model==7)
-        newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
+        newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
         else
         pr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     }

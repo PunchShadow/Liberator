@@ -865,7 +865,11 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
         gpuErrorcheck(cudaPeekAtLastError());
         //cout << "iter " << iter << " first activeNodesNum is " << activeNodesNum << endl;
         unsigned long long overloadedges = 0;
-        while (activeNodesNum > 0 && iter<1000) {
+        // Option 1: drive termination on global max diff, not on active count.
+        const float PR_TOLERANCE = 0.01f;
+        const int PR_MAX_ITER = 1000;
+        float maxDiff = PR_TOLERANCE + 1.0f;
+        while (maxDiff > PR_TOLERANCE && iter < PR_MAX_ITER) {
             //break;
             iter++;
             overloadedges = 0;
@@ -980,11 +984,13 @@ void pr_opt(string path, double adviseRate,int model,int testTimes, double gpuMe
             }
 
             preProcess.startRecord();
-            prKernel_Opt<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.valuePrD, graph.sumD, graph.isActiveD);
+            prKernel_Opt<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.valuePrD, graph.sumD, graph.isActiveD, graph.diffD);
             cudaDeviceSynchronize();
-            activeNodesNum = thrust::reduce(graph.activeLablingThrust, graph.activeLablingThrust + graph.vertexArrSize,
-                                            0,
-                                            thrust::plus<SIZE_TYPE>());
+            // Option 1: all vertices stay active; convergence uses the
+            // per-vertex diff written by prKernel_Opt.
+            maxDiff = thrust::reduce(graph.diffDThrust, graph.diffDThrust + graph.vertexArrSize,
+                                     0.0f, thrust::maximum<float>());
+            activeNodesNum = graph.vertexArrSize;
             nodeSum += activeNodesNum;
             preProcess.endRecord();
             //cout << "iter " << iter+1 << " activeNodesNum " << activeNodesNum << endl;

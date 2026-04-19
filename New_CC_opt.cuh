@@ -14,6 +14,8 @@
 #include "TimeRecord.cuh"
 #include"gpu_kernels.cuh"
 #include "cpu_verify.cuh"
+#include "cache_density.cuh"
+#include "edge_path.cuh"
 #pragma once
 struct StaticRegionInfo
 {
@@ -112,7 +114,7 @@ void cc_kernelStatic(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeListD,
     });
 }
 
-void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false){
+void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = ""){
     if(model!=7){
         cout<<"model not match"<<endl;
         return;
@@ -283,6 +285,8 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     long staticduration = 0;
     dim3 staticgrid(56,1,1);
     dim3 staticblock(1024,1,1);
+    CacheDensityRecorder cacheRec(vertexArrSize, isInStaticD, "cc", fileName, -1LL, cacheCsv);
+    EdgePathRecorder pathRec(vertexArrSize, "cc", fileName, -1LL, pathCsv);
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
         //
         cudaDeviceSynchronize();
@@ -293,9 +297,14 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
         double overloadsize = 0;
         while(activeNodesNum){
             iter++;
+            // Cache-density snapshot: before setLabelDefaultOpt clears
+            // processed vertices.
+            cacheRec.record(isActiveD, isInStaticD);
             //cout<<"iter "<<iter<<" activeNodeNum is "<<activeNodesNum<<" ";
             setStaticAndOverloadLabelBool<<<staticgrid,staticblock>>>(vertexArrSize, isActiveD, isStaticActive, isOverloadActive,
                                                         isInStaticD);
+            // Edge-path snapshot
+            pathRec.record(isStaticActive, isOverloadActive, degreeD);
             SIZE_TYPE staticNodeNum = thrust::reduce(actStaticLablingThrust,
                                                 actStaticLablingThrust + vertexArrSize, 0,
                                                 thrust::plus<SIZE_TYPE>());
@@ -399,6 +408,10 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     cout<<"Test over, average total process time (including pre move data): "<<totalduration/testTimes + preMoveDataTime<<"ms"<<endl;
     cout<<"average static process time: "<<staticduration/testTimes<<"ms"<<endl;
     cout<<"average overload process time: "<<overloadduration/testTimes<<"ms"<<endl;
+    cacheRec.printSummary();
+    cacheRec.writeCsv(cacheCsv, 0);
+    pathRec.printSummary();
+    pathRec.writeCsv(pathCsv, 0);
     gpuErrorcheck(cudaPeekAtLastError());
 
     return;
