@@ -523,6 +523,16 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
                                                                                       graph.overloadNodeListD,
                                                                                       graph.isActiveD);
             }
+            // Cross-stream ordering: streamDynamic waits for clears on steamStatic.
+            // Without this, NEW_sssp_kernelDynamic_test on streamDynamic can write
+            // isActiveD[u]=1 before setLabelDefaultOpt on steamStatic clears u,
+            // losing that activation.
+            static cudaEvent_t clearsDoneEvent = nullptr;
+            if (!clearsDoneEvent) {
+                cudaEventCreateWithFlags(&clearsDoneEvent, cudaEventDisableTiming);
+            }
+            cudaEventRecord(clearsDoneEvent, graph.steamStatic);
+            cudaStreamWaitEvent(graph.streamDynamic, clearsDoneEvent, 0);
             staticProcess.startRecord();
             sssp_kernel<<<graph.grid, graph.block, 0, graph.steamStatic>>>(staticNodeNum, graph.staticNodeListD,
                                                                            graph.staticNodePointerD, graph.degreeD,
