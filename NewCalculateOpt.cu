@@ -116,6 +116,15 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
             // incoming frontier at this point.  setLabelDefaultOpt below
             // will clear processed vertices, so record must happen first.
             cacheRec.record(graph.isActiveD, graph.isInStaticD);
+#ifdef CACHE_STAT
+            // Capture this iter's incoming frontier BEFORE setLabelDefaultOpt clears it.
+            // end_iter is called after the iter body finishes (still inside the while loop).
+            if (recorder) {
+                recorder->record_demand(graph.isActiveD,
+                                        reinterpret_cast<const uint64_t*>(graph.degreeD),
+                                        0);
+            }
+#endif
             //cout <<"iter "<<iter;
             //cout <<"iter "<<iter<< " activeNodesNum is " << activeNodesNum << " ";
             preProcess.startRecord();
@@ -209,9 +218,7 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
             preProcess.endRecord();
 #ifdef CACHE_STAT
             if (recorder) {
-                recorder->record_demand(graph.isActiveD,
-                                        reinterpret_cast<const uint64_t*>(graph.degreeD), 0);
-                cudaDeviceSynchronize();
+                cudaDeviceSynchronize();  // wait for record_demand kernel queued at top of iter
                 recorder->end_iter();
             }
 #endif
