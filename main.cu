@@ -66,7 +66,11 @@ int main(int argc, char** argv) {
         sssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "pr") {
         if(arguments.model==7)
+#ifdef CACHE_STAT
+        newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv, arguments.cacheStatCsv, arguments.cacheStatRunId);
+#else
         newpr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
+#endif
         else
         pr_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     }

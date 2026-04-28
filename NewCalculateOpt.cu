@@ -716,7 +716,11 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
     }
 }
 
+#ifdef CACHE_STAT
+void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv, string cacheStatCsv, int cacheStatRunId){
+#else
 void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv){
+#endif
     cout<<"========NEW_pr_opt==========="<<endl;
     GraphMeta<unsigned long long> graph;
     graph.setAlgType(PR);
@@ -752,6 +756,20 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
     CacheDensityRecorder cacheRec(graph.vertexArrSize, graph.isInStaticD,
                                   "pr", path, -1LL, cacheCsv);
     EdgePathRecorder pathRec(graph.vertexArrSize, "pr", path, -1LL, pathCsv);
+#ifdef CACHE_STAT
+    std::unique_ptr<CacheStatRecorder> recorder;
+    if (!cacheStatCsv.empty()) {
+        graph.BuildCacheStatChunks();
+        std::string basename = path.substr(path.find_last_of('/') + 1);
+        size_t dot = basename.find('.');
+        if (dot != std::string::npos) basename = basename.substr(0, dot);
+        recorder.reset(new CacheStatRecorder(
+            cacheStatCsv, "liberator-m7", "pr", basename,
+            -1, cacheStatRunId));
+        recorder->init_chunks(graph.chunks_, graph.vertex_to_chunk_,
+                              static_cast<uint32_t>(graph.vertexArrSize));
+    }
+#endif
     for (int testIndex = 0; testIndex < testTimes; testIndex++){
         cout<<"====="<<testIndex<<" test====="<<endl;
         graph.refreshLabelAndValue();
@@ -773,6 +791,18 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
         const float PR_TOLERANCE = 0.01f;
         const int PR_MAX_ITER = 1000;
         float maxDiff = PR_TOLERANCE + 1.0f;
+#ifdef CACHE_STAT
+        if (recorder) {
+            recorder->begin_iter(0);
+            for (int c = 0; c < graph.num_real_chunks_; ++c) {
+                recorder->mark_admission(c);
+            }
+            recorder->record_demand(graph.isActiveD,
+                                    reinterpret_cast<const uint64_t*>(graph.degreeD), 0);
+            cudaDeviceSynchronize();
+            recorder->end_iter();
+        }
+#endif
         while(maxDiff > PR_TOLERANCE && iter < PR_MAX_ITER){
             //overloadedges = 0;
             iter++;
@@ -781,6 +811,16 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
             // in particular will report active_in_cache = staticVertexCount
             // because refreshLabelAndValue labels all vertices as active.
             cacheRec.record(graph.isActiveD, graph.isInStaticD);
+#ifdef CACHE_STAT
+            if (recorder) recorder->begin_iter(static_cast<int>(iter));
+            // PR: all vertices are active each iter (isActiveD = all 1s after refreshLabelAndValue)
+            // record_demand captures the all-active frontier
+            if (recorder) {
+                recorder->record_demand(graph.isActiveD,
+                                        reinterpret_cast<const uint64_t*>(graph.degreeD),
+                                        0);
+            }
+#endif
             //cout<<"iter "<<iter;
             preProcess.startRecord();
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
@@ -850,6 +890,12 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
             activeNodesNum = graph.vertexArrSize;
             nodeSum += activeNodesNum;
             preProcess.endRecord();
+#ifdef CACHE_STAT
+            if (recorder) {
+                cudaDeviceSynchronize();
+                recorder->end_iter();
+            }
+#endif
             //cout << "iter " << iter+1 << " activeNodesNum " << activeNodesNum << endl;
             // SIZE_TYPE *overloadnodes = new SIZE_TYPE[graph.vertexArrSize];
             // cudaMemcpy(overloadnodes,graph.overloadNodeListD,sizeof(SIZE_TYPE)*overloadNodeNum,cudaMemcpyDeviceToHost);
@@ -885,6 +931,9 @@ void newpr_opt(string path, double adviseRate,int model,int testTimes, double gp
     cacheRec.writeCsv(cacheCsv, 0);
     pathRec.printSummary();
     pathRec.writeCsv(pathCsv, 0);
+#ifdef CACHE_STAT
+    if (recorder) recorder->finalize();
+#endif
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("Liberator_PR_GSHll_res.txt");
     if (verify) {

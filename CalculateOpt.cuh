@@ -27,5 +27,9 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
 #else
 void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "");
 #endif
+#ifdef CACHE_STAT
+void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "", string cacheStatCsv = "", int cacheStatRunId = 0);
+#else
 void newpr_opt(string path, double adviseRate,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "");
+#endif
 #endif //PTGRAPH_CALCULATEOPT_CUH
