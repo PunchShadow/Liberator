@@ -98,7 +98,9 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
 #ifdef CACHE_STAT
         if (recorder) {
             recorder->begin_iter(0);
-            for (int c = 0; c < recorder->num_chunks(); ++c) {
+            // Only admit real (static) chunks; skip the phantom overload chunk
+            // (index num_real_chunks_..num_chunks-1) which is never resident.
+            for (int c = 0; c < graph.num_real_chunks_; ++c) {
                 recorder->mark_admission(c);
             }
             recorder->record_demand(graph.isActiveD,

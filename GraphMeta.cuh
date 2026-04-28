@@ -245,7 +245,12 @@ public:
     // vertex_to_chunk_[v] == -1 for overload (non-static) vertices.
     std::vector<int> vertex_to_chunk_;
     // ChunkInfo entries parallel vertex_to_chunk_: one per logical chunk.
+    // chunks_[0..num_real_chunks_-1] are static (real); chunks_[num_real_chunks_]
+    // is the phantom overload chunk (if any overload vertices exist).
     std::vector<ChunkInfo> chunks_;
+    // Number of real (static) chunks. The phantom chunk (if appended) is at
+    // index num_real_chunks_ and must NOT be admitted during iter-0 init.
+    int num_real_chunks_ = 0;
 
     // Slice the static partition into chunks of ~target_chunk_bytes based on
     // cumulative edge bytes. Vertices outside the static region get -1.
@@ -1289,9 +1294,50 @@ void GraphMeta<EdgeType>::BuildCacheStatChunks(uint64_t target_chunk_bytes) {
         chunks_.push_back(ci);
     }
 
-    printf("[BuildCacheStatChunks] %zu chunks from %u static vertices "
+    // Record how many real (static) chunks exist before any phantom is appended.
+    // The admission loop in NewCalculateOpt.cu uses this to skip the phantom.
+    num_real_chunks_ = static_cast<int>(chunks_.size());
+
+    // After all real (static) chunks are built, append a phantom chunk
+    // for the overload region so that per-iter hit-ratio denominator
+    // includes overload demand. The phantom is never resident
+    // (is_resident_[phantom]=0) and never admitted; its sole purpose
+    // is to make num_active_vertices summed across CSV rows = full active
+    // set per iter.
+    bool has_overload = false;
+    uint64_t overload_edges = 0;
+    uint32_t overload_first_v = N;
+    uint32_t overload_last_v_plus_one = 0;
+    for (uint32_t v = 0; v < N; ++v) {
+        if (!isInStatic[v]) {
+            has_overload = true;
+            overload_edges += static_cast<uint64_t>(degree[v]);
+            if (v < overload_first_v) overload_first_v = v;
+            if (v + 1 > overload_last_v_plus_one) overload_last_v_plus_one = v + 1;
+        }
+    }
+    if (has_overload) {
+        ChunkInfo ci;
+        ci.chunk_id        = static_cast<int>(chunks_.size()); // = C
+        ci.chunk_bytes     = overload_edges * edge_size;
+        ci.num_total_edges = overload_edges;
+        ci.start_vertex    = overload_first_v;
+        ci.end_vertex      = overload_last_v_plus_one;
+        chunks_.push_back(ci);
+        const int phantom_idx = ci.chunk_id;
+        // Remap overload vertices' v2c from -1 to phantom_idx so the
+        // count kernel attributes their demand to the phantom slot.
+        for (uint32_t v = 0; v < N; ++v) {
+            if (vertex_to_chunk_[v] == -1) {
+                vertex_to_chunk_[v] = phantom_idx;
+            }
+        }
+    }
+
+    printf("[BuildCacheStatChunks] %zu chunks (%s) from %u static vertices "
            "(target %.1f MB)\n",
-           chunks_.size(), N,
+           chunks_.size(), has_overload ? "incl. 1 overload phantom" : "no overload",
+           N,
            target_chunk_bytes / (1024.0 * 1024.0));
 }
 #endif // CACHE_STAT
