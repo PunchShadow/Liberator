@@ -1,11 +1,15 @@
 #include"globals.cuh"
 #include <string>
 #include <iostream>
+#include <memory>
 #include <vector>
 #include <cuda.h>
 #include <chrono>
 #include <fstream>
 #include <cuda_runtime.h>
+#ifdef CACHE_STAT
+#include "cache_stat.cuh"
+#endif
 
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
@@ -114,7 +118,11 @@ void cc_kernelStatic(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeListD,
     });
 }
 
+#ifdef CACHE_STAT
+void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = "", string cacheStatCsv = "", int cacheStatRunId = 0){
+#else
 void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit = 0.0, bool verify = false, string cacheCsv = "", string pathCsv = ""){
+#endif
     if(model!=7){
         cout<<"model not match"<<endl;
         return;
@@ -267,6 +275,81 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     g_gpuMemTracker.printSummary();
     cout << "initGraphDevice() end" << endl;
 
+#ifdef CACHE_STAT
+    std::unique_ptr<CacheStatRecorder> recorder;
+    if (!cacheStatCsv.empty()) {
+        // Build chunk metadata from static/overload partition layout.
+        // Mirror GraphMeta::BuildCacheStatChunks: group static vertices into
+        // 64 MB chunks; append a phantom chunk for overload vertices.
+        const uint64_t target_chunk_bytes = 64ULL * 1024 * 1024;
+        const uint64_t edge_size = sizeof(SIZE_TYPE);
+        std::vector<ChunkInfo> chunks;
+        std::vector<int> v2c(static_cast<size_t>(vertexArrSize), -1);
+
+        int current_chunk = 0;
+        uint64_t accum_bytes = 0;
+        uint32_t chunk_start = UINT32_MAX;
+        for (SIZE_TYPE v = 0; v < vertexArrSize; ++v) {
+            if (!isInStatic[v]) continue;
+            uint64_t v_bytes = static_cast<uint64_t>(degree[v]) * edge_size;
+            if (chunk_start == UINT32_MAX) { chunk_start = (uint32_t)v; accum_bytes = 0; }
+            if (accum_bytes + v_bytes > target_chunk_bytes && accum_bytes > 0) {
+                ChunkInfo ci; ci.chunk_id = current_chunk; ci.chunk_bytes = accum_bytes;
+                ci.num_total_edges = accum_bytes / edge_size;
+                ci.start_vertex = chunk_start; ci.end_vertex = (uint32_t)v;
+                chunks.push_back(ci); ++current_chunk;
+                chunk_start = (uint32_t)v; accum_bytes = 0;
+            }
+            v2c[v] = current_chunk;
+            accum_bytes += v_bytes;
+        }
+        if (chunk_start != UINT32_MAX && accum_bytes > 0) {
+            ChunkInfo ci; ci.chunk_id = current_chunk; ci.chunk_bytes = accum_bytes;
+            ci.num_total_edges = accum_bytes / edge_size;
+            ci.start_vertex = chunk_start; ci.end_vertex = (uint32_t)vertexArrSize;
+            chunks.push_back(ci);
+        }
+        int num_real_chunks = static_cast<int>(chunks.size());
+        // Phantom chunk for overload vertices
+        bool has_overload = false;
+        uint64_t overload_edges = 0;
+        uint32_t ov_first = (uint32_t)vertexArrSize, ov_last_plus1 = 0;
+        for (SIZE_TYPE v = 0; v < vertexArrSize; ++v) {
+            if (!isInStatic[v]) {
+                has_overload = true;
+                overload_edges += (uint64_t)degree[v];
+                if ((uint32_t)v < ov_first) ov_first = (uint32_t)v;
+                if ((uint32_t)v + 1 > ov_last_plus1) ov_last_plus1 = (uint32_t)v + 1;
+            }
+        }
+        if (has_overload) {
+            int phantom_idx = (int)chunks.size();
+            ChunkInfo ci; ci.chunk_id = phantom_idx;
+            ci.chunk_bytes = overload_edges * edge_size; ci.num_total_edges = overload_edges;
+            ci.start_vertex = ov_first; ci.end_vertex = ov_last_plus1;
+            chunks.push_back(ci);
+            for (SIZE_TYPE v = 0; v < vertexArrSize; ++v) {
+                if (!isInStatic[v]) v2c[v] = phantom_idx;
+            }
+        }
+
+        std::string basename = fileName.substr(fileName.find_last_of('/') + 1);
+        size_t dot = basename.find('.');
+        if (dot != std::string::npos) basename = basename.substr(0, dot);
+        recorder.reset(new CacheStatRecorder(
+            cacheStatCsv, "liberator-m7", "cc", basename, -1, cacheStatRunId));
+        recorder->init_chunks(chunks, v2c, static_cast<uint32_t>(vertexArrSize));
+
+        // iter=0: admit all real (static) chunks; skip phantom
+        recorder->begin_iter(0);
+        for (int c = 0; c < num_real_chunks; ++c) recorder->mark_admission(c);
+        recorder->record_demand(isActiveD,
+                                reinterpret_cast<const uint64_t*>(degreeD), 0);
+        cudaDeviceSynchronize();
+        recorder->end_iter();
+    }
+#endif
+
     cudaDeviceSynchronize();
     TimeRecord<chrono::milliseconds> totalProcess("totalProcess");
     TimeRecord<chrono::milliseconds> staticProcess("staticProcess");
@@ -297,9 +380,18 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
         double overloadsize = 0;
         while(activeNodesNum){
             iter++;
+#ifdef CACHE_STAT
+            if (recorder) recorder->begin_iter(static_cast<int>(iter));
+#endif
             // Cache-density snapshot: before setLabelDefaultOpt clears
             // processed vertices.
             cacheRec.record(isActiveD, isInStaticD);
+#ifdef CACHE_STAT
+            if (recorder) {
+                recorder->record_demand(isActiveD,
+                                        reinterpret_cast<const uint64_t*>(degreeD), 0);
+            }
+#endif
             //cout<<"iter "<<iter<<" activeNodeNum is "<<activeNodesNum<<" ";
             setStaticAndOverloadLabelBool<<<staticgrid,staticblock>>>(vertexArrSize, isActiveD, isStaticActive, isOverloadActive,
                                                         isInStaticD);
@@ -379,6 +471,12 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
             // double temp = (double)(overloadedges)*sizeof(SIZE_TYPE)/1024;
             // cout<<temp<<endl;
             // overloadsize += temp;
+#ifdef CACHE_STAT
+            if (recorder) {
+                cudaDeviceSynchronize();
+                recorder->end_iter();
+            }
+#endif
         }
         totalProcess.endRecord();
         cout<<"total iter: "<<iter<<endl;
@@ -412,6 +510,9 @@ void New_CC_opt(string fileName,int model,int testTimes, double gpuMemoryLimit =
     cacheRec.writeCsv(cacheCsv, 0);
     pathRec.printSummary();
     pathRec.writeCsv(pathCsv, 0);
+#ifdef CACHE_STAT
+    if (recorder) recorder->finalize();
+#endif
     gpuErrorcheck(cudaPeekAtLastError());
 
     return;

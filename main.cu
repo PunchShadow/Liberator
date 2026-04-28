@@ -48,7 +48,11 @@ int main(int argc, char** argv) {
     } else if (arguments.algo == "cc") {
         if(arguments.model==7)
         //newcc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
+#ifdef CACHE_STAT
+        New_CC_opt(arguments.input,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv, arguments.cacheStatCsv, arguments.cacheStatRunId);
+#else
         New_CC_opt(arguments.input,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
+#endif
         else
         cc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "sssp") {
