@@ -22,6 +22,9 @@
 #include <cstring>
 #include "TimeRecord.cuh"
 #include "globals.cuh"
+#ifdef CACHE_STAT
+#include "cache_stat.cuh"
+#endif
 
 // Helper: assign a uint64 value to EdgeType, handling EdgeWithWeight specially
 template <typename EdgeType>
@@ -236,6 +239,19 @@ public:
     SIZE_TYPE ret_max_partition_size(){
         return max_partition_size;
     }
+
+#ifdef CACHE_STAT
+    // Filled by BuildCacheStatChunks() after initGraphHost().
+    // vertex_to_chunk_[v] == -1 for overload (non-static) vertices.
+    std::vector<int> vertex_to_chunk_;
+    // ChunkInfo entries parallel vertex_to_chunk_: one per logical chunk.
+    std::vector<ChunkInfo> chunks_;
+
+    // Slice the static partition into chunks of ~target_chunk_bytes based on
+    // cumulative edge bytes. Vertices outside the static region get -1.
+    void BuildCacheStatChunks(uint64_t target_chunk_bytes = 64ULL * 1024 * 1024);
+#endif
+
 private:
     SIZE_TYPE max_partition_size;
     SIZE_TYPE max_static_node;
@@ -1226,4 +1242,58 @@ void GraphMeta<EdgeType>::writevalue(string filename){
     outfile.close();
     
 }
+#ifdef CACHE_STAT
+template<class EdgeType>
+void GraphMeta<EdgeType>::BuildCacheStatChunks(uint64_t target_chunk_bytes) {
+    const uint64_t edge_size = sizeof(EdgeType);
+    const uint32_t N = static_cast<uint32_t>(vertexArrSize);
+
+    vertex_to_chunk_.assign(N, -1);
+    chunks_.clear();
+
+    int current_chunk = 0;
+    uint64_t accum_bytes = 0;
+    uint32_t chunk_start = UINT32_MAX;
+
+    for (uint32_t v = 0; v < N; ++v) {
+        if (!isInStatic[v]) continue;
+        uint64_t v_bytes = static_cast<uint64_t>(degree[v]) * edge_size;
+        if (chunk_start == UINT32_MAX) {
+            chunk_start = v;
+            accum_bytes = 0;
+        }
+        if (accum_bytes + v_bytes > target_chunk_bytes && accum_bytes > 0) {
+            // Close current chunk at vertex v (exclusive).
+            ChunkInfo ci;
+            ci.chunk_id       = current_chunk;
+            ci.chunk_bytes    = accum_bytes;
+            ci.num_total_edges = accum_bytes / edge_size;
+            ci.start_vertex   = chunk_start;
+            ci.end_vertex     = v;
+            chunks_.push_back(ci);
+            ++current_chunk;
+            chunk_start = v;
+            accum_bytes = 0;
+        }
+        vertex_to_chunk_[v] = current_chunk;
+        accum_bytes += v_bytes;
+    }
+    // Flush the last chunk.
+    if (chunk_start != UINT32_MAX && accum_bytes > 0) {
+        ChunkInfo ci;
+        ci.chunk_id       = current_chunk;
+        ci.chunk_bytes    = accum_bytes;
+        ci.num_total_edges = accum_bytes / edge_size;
+        ci.start_vertex   = chunk_start;
+        ci.end_vertex     = N;
+        chunks_.push_back(ci);
+    }
+
+    printf("[BuildCacheStatChunks] %zu chunks from %u static vertices "
+           "(target %.1f MB)\n",
+           chunks_.size(), N,
+           target_chunk_bytes / (1024.0 * 1024.0));
+}
+#endif // CACHE_STAT
+
 #endif //PTGRAPH_GRAPHMETA_CUH
