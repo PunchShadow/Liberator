@@ -24,6 +24,8 @@ public:
     bool verify = false; // Run CPU verification after GPU computation
     string cacheCsv; // Path for per-iter cache density CSV output (empty = disabled)
     string pathCsv;  // Path for per-iter edge-path breakdown CSV output (empty = disabled)
+    string cacheStatCsv;       // Path for cache admission accuracy events CSV (CACHE_STAT only)
+    int cacheStatRunId = 0;    // run_id column value for cache stat CSV
     ArgumentParser(int argc, char **argv, bool canHaveSource);
 
     bool Parse();

@@ -51,6 +51,12 @@ bool ArgumentParser::Parse() {
             else if(strcmp(argv[i], "--path_csv")==0){
                 pathCsv = string(argv[i+1]);
             }
+            else if(strcmp(argv[i], "--cache-stat-csv")==0){
+                cacheStatCsv = string(argv[i+1]);
+            }
+            else if(strcmp(argv[i], "--cache-stat-run-id")==0){
+                cacheStatRunId = atoi(argv[i+1]);
+            }
         }
 
         if (hasInput)
@@ -74,5 +80,9 @@ string ArgumentParser::GenerateHelpString() {
     str += "\nOptional arguments";
     if (canHaveSource)
         str += "\n    [--source]:  Begins from the source (Default: 0). E.g., --source 10";
+    str += "\n  --cache_csv <path>         Output path for per-iter cache density CSV (empty = disabled)";
+    str += "\n  --path_csv <path>          Output path for per-iter edge-path breakdown CSV (empty = disabled)";
+    str += "\n  --cache-stat-csv <path>    Output path for cache admission events CSV (CACHE_STAT only)";
+    str += "\n  --cache-stat-run-id <N>    run_id column value (default 0; CACHE_STAT only)";
     return str;
 }
