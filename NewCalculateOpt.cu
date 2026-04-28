@@ -482,7 +482,11 @@ void newcc_opt(string path, double adviseRate,int model,int testTimes, double gp
     }
 }
 
+#ifdef CACHE_STAT
+void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv, string cacheStatCsv, int cacheStatRunId){
+#else
 void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv){
+#endif
     cout << "========NEW_sssp_opt==========" << endl;
     GraphMeta<EdgeWithWeight> graph;
     graph.setAlgType(SSSP);
@@ -496,6 +500,21 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
     cudaDeviceSynchronize();
     gpuErrorcheck(cudaPeekAtLastError());
     graph.checkNodeforSSSP(sourceNode);
+
+#ifdef CACHE_STAT
+    std::unique_ptr<CacheStatRecorder> recorder;
+    if (!cacheStatCsv.empty()) {
+        graph.BuildCacheStatChunks();
+        std::string basename = path.substr(path.find_last_of('/') + 1);
+        size_t dot = basename.find('.');
+        if (dot != std::string::npos) basename = basename.substr(0, dot);
+        recorder.reset(new CacheStatRecorder(
+            cacheStatCsv, "liberator-m7", "sssp", basename,
+            static_cast<int>(sourceNode), cacheStatRunId));
+        recorder->init_chunks(graph.chunks_, graph.vertex_to_chunk_,
+                              static_cast<uint32_t>(graph.vertexArrSize));
+    }
+#endif
 
     TimeRecord<chrono::milliseconds> totalProcess("totalProcess");
     TimeRecord<chrono::milliseconds> staticProcess("staticProcess");
@@ -533,11 +552,34 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
         int iter = 0;
         totalProcess.startRecord();
 
+#ifdef CACHE_STAT
+        if (recorder) {
+            recorder->begin_iter(0);
+            for (int c = 0; c < graph.num_real_chunks_; ++c) {
+                recorder->mark_admission(c);
+            }
+            recorder->record_demand(graph.isActiveD,
+                                    reinterpret_cast<const uint64_t*>(graph.degreeD), 0);
+            cudaDeviceSynchronize();
+            recorder->end_iter();
+        }
+#endif
+
         while(activeNodesNum){
             iter++;
+#ifdef CACHE_STAT
+            if (recorder) recorder->begin_iter(static_cast<int>(iter));
+#endif
             // Cache-density snapshot: isActiveD holds this iter's incoming
             // frontier here, before setLabelDefaultOpt clears processed vertices.
             cacheRec.record(graph.isActiveD, graph.isInStaticD);
+#ifdef CACHE_STAT
+            if (recorder) {
+                recorder->record_demand(graph.isActiveD,
+                                        reinterpret_cast<const uint64_t*>(graph.degreeD),
+                                        0);
+            }
+#endif
             //cout<<"iter "<<iter<<" activeNodeNum is "<<activeNodesNum<<" ";
             setStaticAndOverloadLabelBool<<<graph.grid, graph.block>>>(graph.vertexArrSize, graph.isActiveD,
                                                                        graph.isStaticActive, graph.isOverloadActive,
@@ -629,6 +671,12 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
             // }
             // double temp = (double)overloadedges*sizeof(SIZE_TYPE)/1024/1024;
             // cout<<temp<<endl;
+#ifdef CACHE_STAT
+            if (recorder) {
+                cudaDeviceSynchronize();
+                recorder->end_iter();
+            }
+#endif
         }
         totalProcess.endRecord();
         cout<<"total iter: "<<iter<<endl;
@@ -656,6 +704,9 @@ void newsssp_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model,
     cacheRec.writeCsv(cacheCsv, 0);
     pathRec.printSummary();
     pathRec.writeCsv(pathCsv, 0);
+#ifdef CACHE_STAT
+    if (recorder) recorder->finalize();
+#endif
     gpuErrorcheck(cudaPeekAtLastError());
     //graph.writevalue("newsssp.txt");
     if (verify) {

@@ -57,7 +57,11 @@ int main(int argc, char** argv) {
         cc_opt(arguments.input, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "sssp") {
         if(arguments.model==7)
+#ifdef CACHE_STAT
+        newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv, arguments.cacheStatCsv, arguments.cacheStatRunId);
+#else
         newsssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
+#endif
         else
         sssp_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "pr") {
