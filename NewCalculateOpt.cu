@@ -2,8 +2,15 @@
 #include "cpu_verify.cuh"
 #include "cache_density.cuh"
 #include "edge_path.cuh"
+#ifdef CACHE_STAT
+#include <memory>
+#endif
 
+#ifdef CACHE_STAT
+void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv, string cacheStatCsv, int cacheStatRunId){
+#else
 void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, int testTimes, double gpuMemoryLimit, bool verify, string cacheCsv, string pathCsv){
+#endif
     cout << "======NEW_bfs_opt=======" << endl;
     cout<<"sourceNode: "<<sourceNode<<endl;
     GraphMeta<SIZE_TYPE> graph;
@@ -23,7 +30,22 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
     graph.initGraphDevice();
     cudaDeviceSynchronize();
     cout << "1test!!!!!!!!!" <<endl;
-    
+
+#ifdef CACHE_STAT
+    std::unique_ptr<CacheStatRecorder> recorder;
+    if (!cacheStatCsv.empty()) {
+        graph.BuildCacheStatChunks();
+        std::string basename = path.substr(path.find_last_of('/') + 1);
+        size_t dot = basename.find('.');
+        if (dot != std::string::npos) basename = basename.substr(0, dot);
+        recorder.reset(new CacheStatRecorder(
+            cacheStatCsv, "liberator-m7", "bfs", basename,
+            static_cast<int>(sourceNode), cacheStatRunId));
+        recorder->init_chunks(graph.chunks_, graph.vertex_to_chunk_,
+                              static_cast<uint32_t>(graph.vertexArrSize));
+    }
+#endif
+
     graph.checkNode(sourceNode);
 
     cout << "2test!!!!!!!!!" <<endl;
@@ -73,8 +95,23 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
 
         int iter = 0;
         totalProcess.startRecord();
+#ifdef CACHE_STAT
+        if (recorder) {
+            recorder->begin_iter(0);
+            for (int c = 0; c < recorder->num_chunks(); ++c) {
+                recorder->mark_admission(c);
+            }
+            recorder->record_demand(graph.isActiveD,
+                                    reinterpret_cast<const uint64_t*>(graph.degreeD), 0);
+            cudaDeviceSynchronize();
+            recorder->end_iter();
+        }
+#endif
         while(activeNodesNum){
             iter++;
+#ifdef CACHE_STAT
+            if (recorder) recorder->begin_iter(static_cast<int>(iter));
+#endif
             // Cache-density snapshot: isActiveD still holds this iter's
             // incoming frontier at this point.  setLabelDefaultOpt below
             // will clear processed vertices, so record must happen first.
@@ -135,11 +172,11 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
                                                                                 graph.staticNodePointerD, graph.degreeD,
                                                                                 graph.staticEdgeListD, graph.valueD,
                                                                                 graph.isActiveD,graph.isInStaticD);
-            
+
             gpuErrorcheck(cudaPeekAtLastError());
-            
+
             if(overloadNodeNum > 0){
-                
+
                 overloadProcess.startRecord();
                 uint64_t numthreads = 1024;
                 uint64_t numblocks = ((overloadNodeNum * WARP_SIZE + numthreads) / numthreads);
@@ -152,7 +189,7 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
                 gpuErrorcheck(cudaPeekAtLastError());
                 //cudaDeviceSynchronize();
                 cudaStreamSynchronize(graph.streamDynamic);
-                overloadProcess.endRecord(); 
+                overloadProcess.endRecord();
                 cudaStreamSynchronize(graph.steamStatic);
                 staticProcess.endRecord();
             }
@@ -170,7 +207,15 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
                                             thrust::plus<SIZE_TYPE>());
             nodeSum += activeNodesNum;
             preProcess.endRecord();
-            //overloadedges = 0; 
+#ifdef CACHE_STAT
+            if (recorder) {
+                recorder->record_demand(graph.isActiveD,
+                                        reinterpret_cast<const uint64_t*>(graph.degreeD), 0);
+                cudaDeviceSynchronize();
+                recorder->end_iter();
+            }
+#endif
+            //overloadedges = 0;
             // SIZE_TYPE *overloadnodes = new SIZE_TYPE[graph.vertexArrSize];
             // cudaMemcpy(overloadnodes,graph.overloadNodeListD,sizeof(SIZE_TYPE)*overloadNodeNum,cudaMemcpyDeviceToHost);
             // cudaDeviceSynchronize();
@@ -214,6 +259,9 @@ void newbfs_opt(string path, SIZE_TYPE sourceNode, double adviseRate,int model, 
     cacheRec.writeCsv(cacheCsv, 0);
     pathRec.printSummary();
     pathRec.writeCsv(pathCsv, 0);
+#ifdef CACHE_STAT
+    if (recorder) recorder->finalize();
+#endif
     if (verify) {
         cudaMemcpy(graph.value, graph.valueD, graph.vertexArrSize * sizeof(SIZE_TYPE), cudaMemcpyDeviceToHost);
         cudaDeviceSynchronize();

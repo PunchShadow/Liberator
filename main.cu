@@ -38,7 +38,11 @@ int main(int argc, char** argv) {
         cout << "arguments.algo " << arguments.algo << endl;
     cout<<"arguments.sourceNode "<<arguments.sourceNode<<endl;
         if(arguments.model==7)
+#ifdef CACHE_STAT
+        newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv, arguments.cacheStatCsv, arguments.cacheStatRunId);
+#else
         newbfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK, arguments.model, arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify, arguments.cacheCsv, arguments.pathCsv);
+#endif
         else
         bfs_opt(arguments.input, arguments.sourceNode, arguments.adviseK,arguments.model,arguments.testTimes, arguments.gpuMemoryLimit, arguments.verify);
     } else if (arguments.algo == "cc") {
