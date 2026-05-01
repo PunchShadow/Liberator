@@ -471,14 +471,12 @@ cc_kernel(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointersD
         SIZE_TYPE id = activeNodesD[index];
         SIZE_TYPE edgeIndex = nodePointersD[id];
         SIZE_TYPE sourceValue = valueD[id];
+        // Push-only CC (Thievory/HyTGraph-style): SV-style pull-back removed.
         for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[id]; i++) {
             SIZE_TYPE destValue = valueD[edgeListD[i]];
             if (sourceValue < destValue) {
                 atomicMin(&valueD[edgeListD[i]], sourceValue);
                 labelD[edgeListD[i]] = true;
-            } else if (destValue < sourceValue) {
-                atomicMin(&valueD[id], destValue);
-                labelD[id] = true;
             }
         }
     });
@@ -493,14 +491,12 @@ ccKernel_CommonPartition(SIZE_TYPE startVertex, SIZE_TYPE endVertex, SIZE_TYPE o
         if (isActiveNodeListD[nodeIndex]) {
             SIZE_TYPE edgeIndex = nodePointersD[nodeIndex] - offset;
             SIZE_TYPE sourceValue = valueD[nodeIndex];
+            // Push-only CC: SV-style pull-back removed.
             for (SIZE_TYPE i = edgeIndex; i < edgeIndex + degreeD[nodeIndex]; i++) {
                 SIZE_TYPE destValue = valueD[edgeListD[i]];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[edgeListD[i]], sourceValue);
                     nextActiveNodeListD[edgeListD[i]] = true;
-                } else if (destValue < sourceValue) {
-                    atomicMin(&valueD[nodeIndex], destValue);
-                    nextActiveNodeListD[nodeIndex] = true;
                 }
             }
         }
@@ -851,12 +847,10 @@ cc_kernelOpt(SIZE_TYPE activeNum, SIZE_TYPE *activeNodesD, SIZE_TYPE *nodePointe
                 vertexId = edgeListD[edgeIndex + i];
             }
             SIZE_TYPE destValue = valueD[vertexId];
+            // Push-only CC: SV-style pull-back removed.
             if (sourceValue < destValue) {
                 atomicMin(&valueD[vertexId], sourceValue);
                 labelD[vertexId] = true;
-            } else if (destValue < sourceValue) {
-                atomicMin(&valueD[id], destValue);
-                labelD[id] = true;
             }
         }
     });
@@ -872,16 +866,13 @@ cc_kernelStaticSwapOpt2Label(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeList
             isActiveD1[id] = 0;
             SIZE_TYPE edgeIndex = staticNodePointerD[id];
             SIZE_TYPE sourceValue = valueD[id];
+            // Push-only CC: SV-style pull-back removed.
             for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 SIZE_TYPE vertexId = edgeListD[edgeIndex + i];
                 SIZE_TYPE destValue = valueD[vertexId];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD2[vertexId] = 1;
-                    *isFinish = false;
-                } else if (destValue < sourceValue) {
-                    atomicMin(&valueD[id], destValue);
-                    isActiveD2[id] = 1;
                     *isFinish = false;
                 }
             }
@@ -898,15 +889,13 @@ cc_kernelStaticSwapOpt(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeListD,
         SIZE_TYPE id = activeNodeListD[index];
         SIZE_TYPE edgeIndex = staticNodePointerD[id];
         SIZE_TYPE sourceValue = valueD[id];
+        // Push-only CC: SV-style pull-back removed.
         for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
             SIZE_TYPE vertexId = edgeListD[edgeIndex + i];
             SIZE_TYPE destValue = valueD[vertexId];
             if (sourceValue < destValue) {
                 atomicMin(&valueD[vertexId], sourceValue);
                 isActiveD[vertexId] = 1;
-            } else if (destValue < sourceValue) {
-                atomicMin(&valueD[id], destValue);
-                isActiveD[id] = 1;
             }
         }
     });
@@ -965,6 +954,7 @@ cc_kernelDynamicAsync(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNum, co
         if (labelD1[id]) {
             labelD1[id] = 0;
             SIZE_TYPE sourceValue = valueD[id];
+            // Push-only CC: SV-style pull-back removed.
             for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 SIZE_TYPE vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                                   activeOverloadNodePointersD[overloadStartNode] + i];
@@ -973,10 +963,6 @@ cc_kernelDynamicAsync(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNum, co
                     atomicMin(&valueD[vertexId], sourceValue);
                     *finished = false;
                     labelD2[vertexId] = 1;
-                } else if (destValue < sourceValue) {
-                    atomicMin(&valueD[id], destValue);
-                    *finished = false;
-                    labelD2[id] = 1;
                 }
             }
         }
@@ -996,6 +982,7 @@ cc_kernelDynamicSwap2Label(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNu
         if (isActiveD1[id]) {
             isActiveD1[id] = 0;
             SIZE_TYPE sourceValue = valueD[id];
+            // Push-only CC: SV-style pull-back removed.
             for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 SIZE_TYPE vertexId = edgeListOverloadD[activeOverloadNodePointersD[traverseIndex] -
                                                   activeOverloadNodePointersD[overloadStartNode] + i];
@@ -1003,10 +990,6 @@ cc_kernelDynamicSwap2Label(SIZE_TYPE overloadStartNode, SIZE_TYPE overloadNodeNu
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD2[vertexId] = 1;
-                    *finished = false;
-                } else if (destValue < sourceValue) {
-                    atomicMin(&valueD[id], destValue);
-                    isActiveD2[id] = 1;
                     *finished = false;
                 }
             }

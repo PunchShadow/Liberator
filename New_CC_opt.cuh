@@ -103,15 +103,13 @@ void cc_kernelStatic(SIZE_TYPE activeNodesNum, SIZE_TYPE *activeNodeListD,
         if (isInStaticD[id]) {
             SIZE_TYPE edgeIndex = staticNodePointerD[id];
             SIZE_TYPE sourceValue = valueD[id];
+            // Push-only CC: SV-style pull-back removed.
             for (SIZE_TYPE i = 0; i < degreeD[id]; i++) {
                 SIZE_TYPE vertexId = edgeListD[edgeIndex + i];
                 SIZE_TYPE destValue = valueD[vertexId];
                 if (sourceValue < destValue) {
                     atomicMin(&valueD[vertexId], sourceValue);
                     isActiveD[vertexId] = 1;
-                } else if (destValue < sourceValue) {
-                    atomicMin(&valueD[id], destValue);
-                    isActiveD[id] = 1;
                 }
             }
         }
